@@ -1,0 +1,46 @@
+name: Refresh JFrog license data
+
+on:
+  schedule:
+    # Once daily at 07:17 UTC. Non-round minute reduces scheduler congestion.
+    - cron: "17 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-jfrog-license-data
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Refresh and validate official license data
+        run: npm run refresh
+
+      - name: Verify generated JavaScript
+        run: npm run check
+
+      - name: Commit changed reference data
+        run: |
+          if git diff --quiet -- data/license-data.json license-data.js; then
+            echo "No license data changes."
+            exit 0
+          fi
+          git add data/license-data.json license-data.js
+          git -c user.name="github-actions[bot]" \
+            -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -m "chore: refresh JFrog license reference data"
+          git push

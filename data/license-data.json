@@ -1,0 +1,1105 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-06T19:29:47.256Z",
+  "status": "review_required",
+  "sources": {
+    "productMatrix": {
+      "url": "https://docs.jfrog.com/installation/docs/license-matrix-pro-x-enterprise-x-enterprise",
+      "updatedAt": "2026-08-02T06:41:48.000Z",
+      "fetchedAt": "2026-08-06T19:29:47.256Z",
+      "sha256": "e6b5756088c9da0696879ec48d6b547f8fbe6ce970d57ff293ed11c62f387608",
+      "contentType": "text/markdown; charset=utf-8"
+    },
+    "featureMatrix": {
+      "url": "https://docs.jfrog.com/installation/docs/feature-comparison-matrix-for-self-mangaged-jpds",
+      "updatedAt": "2026-05-29T11:59:44.000Z",
+      "fetchedAt": "2026-08-06T19:29:47.256Z",
+      "sha256": "a9bd7daf0e05861b58358f63075463d774913ce2d9dde6580b32d20c6d9ecc99",
+      "contentType": "text/markdown; charset=utf-8"
+    },
+    "projects": {
+      "url": "https://docs.jfrog.com/projects/docs/projects-subscription-allocation",
+      "updatedAt": "2026-08-02T07:02:37.000Z",
+      "fetchedAt": "2026-08-06T19:29:47.256Z",
+      "sha256": "2e8983d387491f5e60e493639936a2f0070f1d4ed5b16e4949fd670341dc9474",
+      "contentType": "text/markdown; charset=utf-8"
+    },
+    "advancedSecurity": {
+      "url": "https://docs.jfrog.com/security/docs/advanced-security",
+      "updatedAt": "2026-01-19T08:29:27.000Z",
+      "fetchedAt": "2026-08-06T19:29:47.256Z",
+      "sha256": "eb029e743bed8d06a5221d44cbea934108fd18e7f0edb292b9489a1f81b69179",
+      "contentType": "text/markdown; charset=utf-8"
+    },
+    "pricing": {
+      "url": "https://jfrog.com/pricing/",
+      "updatedAt": null,
+      "fetchedAt": "2026-08-06T19:29:47.256Z",
+      "sha256": "b508a2b50bbc66d3bf93549384379e2a1e7bf97945057d259d3b71adfcf53106",
+      "contentType": "text/html; charset=UTF-8"
+    }
+  },
+  "thresholds": {
+    "projects": {
+      "pro": 3,
+      "prox": 3,
+      "entx": 30,
+      "entplus": 300,
+      "bucketIncrement": 100
+    },
+    "selfManagedArtifactoryServers": {
+      "prox": 1,
+      "entx": 3,
+      "entplus": 6
+    },
+    "saasBaseConsumptionGB": {
+      "pro": 25,
+      "entx": 125,
+      "entplus": null
+    },
+    "advancedSecurityBaseContributingDevelopers": {
+      "entx": 50,
+      "entplus": 200
+    },
+    "contributingDeveloperWindowDays": 90
+  },
+  "productMatrix": {
+    "artifactory": {
+      "label": "Artifactory",
+      "prox": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "xray": {
+      "label": "Xray",
+      "prox": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "distribution": {
+      "label": "Distribution",
+      "prox": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "entx": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "mission_control": {
+      "label": "Mission Control",
+      "prox": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "entx": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "jas": {
+      "label": "JAS",
+      "prox": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "workers": {
+      "label": "Workers",
+      "prox": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "bridge_client": {
+      "label": "Bridge Client",
+      "prox": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "entx": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "federation_service": {
+      "label": "Federation Service",
+      "prox": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "edge_nodes": {
+      "label": "Edge nodes",
+      "prox": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "entx": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "ai_ml": {
+      "label": "AI/ML",
+      "prox": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "entx": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "apptrust": {
+      "label": "AppTrust",
+      "prox": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "entx": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "mcp_server": {
+      "label": "MCP Server",
+      "prox": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    }
+  },
+  "selfManagedFeatureMatrix": {
+    "jfrog_artifactory": {
+      "label": "JFrog Artifactory",
+      "nonCommercial": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "prox": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "jfrog_xray": {
+      "label": "JFrog Xray",
+      "nonCommercial": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "prox": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "xray_ha": {
+      "label": "Xray HA",
+      "nonCommercial": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "prox": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Built-in"
+      }
+    },
+    "recursive_security_scanning": {
+      "label": "Recursive security scanning",
+      "nonCommercial": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "prox": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "license_compliance_scanning": {
+      "label": "License compliance scanning",
+      "nonCommercial": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "prox": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "impact_analysis": {
+      "label": "Impact analysis",
+      "nonCommercial": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "prox": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "dependency_tracking": {
+      "label": "Dependency tracking",
+      "nonCommercial": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "prox": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "ide_and_ci_cd_integration": {
+      "label": "IDE and CI/CD integration",
+      "nonCommercial": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "prox": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "open_api": {
+      "label": "Open API",
+      "nonCommercial": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "prox": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "multi_site_push_replication": {
+      "label": "Multi-site push replication",
+      "nonCommercial": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "prox": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "advanced_storage_options": {
+      "label": "Advanced storage options",
+      "nonCommercial": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "prox": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "maximized_uptime_up_to_99_999": {
+      "label": "Maximized uptime (up to 99.999%)",
+      "nonCommercial": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "prox": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "load_balancing": {
+      "label": "Load balancing",
+      "nonCommercial": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "prox": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "minimized_maintenance_downtime": {
+      "label": "Minimized maintenance downtime",
+      "nonCommercial": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "prox": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "distribution_edge_nodes": {
+      "label": "Distribution Edge Nodes",
+      "nonCommercial": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "prox": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "entx": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "access_federation": {
+      "label": "Access Federation",
+      "nonCommercial": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "prox": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "entx": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "on_site_training": {
+      "label": "On-site training",
+      "nonCommercial": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "prox": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "entx": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "basic_artifact_and_repository_management_proxy_cache_bulk_deploy_include_exclude_patterns_rest_api_move_copy_delete_checksum_based_storage": {
+      "label": "Basic artifact and repository management (proxy/cache, bulk deploy, include/exclude patterns, REST API, move/copy/delete, checksum-based storage)",
+      "nonCommercial": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "prox": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "on_demand_jar_signing_and_web_start_custom_repository_layouts": {
+      "label": "On-demand Jar signing and Web Start, custom repository layouts",
+      "nonCommercial": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "prox": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "repository_replication": {
+      "label": "Repository replication",
+      "nonCommercial": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "prox": {
+        "state": "included",
+        "raw": "✅ Single replication between two instances"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "local_remote_and_virtual_repositories": {
+      "label": "Local, remote, and virtual repositories",
+      "nonCommercial": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "prox": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "federated_repositories": {
+      "label": "Federated repositories",
+      "nonCommercial": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "prox": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "repository_support_for_package_clients": {
+      "label": "Repository support for package clients",
+      "nonCommercial": {
+        "state": "included",
+        "raw": "✅ JCR: Docker, Helm, OCI, Generic. OSS: Maven, Gradle, Ivy, SBT, Generic. CE: Conan, Generic"
+      },
+      "prox": {
+        "state": "included",
+        "raw": "✅ All package types"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ All package types"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ All package types"
+      }
+    },
+    "integration_with_ci_servers": {
+      "label": "Integration with CI servers",
+      "nonCommercial": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "prox": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "build_artifact_promotion_demotion_and_cleanup": {
+      "label": "Build artifact promotion, demotion, and cleanup",
+      "nonCommercial": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "prox": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "rest_apis_and_cli_integration": {
+      "label": "REST APIs and CLI integration",
+      "nonCommercial": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "prox": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "groovy_based_user_plugins": {
+      "label": "Groovy-based user plugins",
+      "nonCommercial": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "prox": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "ecosystem_integrations": {
+      "label": "Ecosystem integrations",
+      "nonCommercial": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "prox": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "ldap_authentication_role_based_authorization": {
+      "label": "LDAP authentication, role-based authorization",
+      "nonCommercial": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "prox": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "ldap_groups": {
+      "label": "LDAP groups",
+      "nonCommercial": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "prox": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "multiple_authentication_providers_active_directory_atlassian_crowd_jira_oauth": {
+      "label": "Multiple authentication providers (Active Directory, Atlassian Crowd/Jira, OAuth)",
+      "nonCommercial": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "prox": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "saml_single_sign_on_sso_for_ntlm_kerberos": {
+      "label": "SAML single sign-on, SSO for NTLM/Kerberos",
+      "nonCommercial": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "prox": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "webhooks_vulnerability_scanning_open_source_license_checks": {
+      "label": "Webhooks, vulnerability scanning, open source license checks",
+      "nonCommercial": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "prox": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "search_name_archive_property_checksum_aql_searchable_properties": {
+      "label": "Search (name, archive, property, checksum), AQL, searchable properties",
+      "nonCommercial": {
+        "state": "included",
+        "raw": "✅ JCR only (not available in OSS or CE)"
+      },
+      "prox": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "cloud_storage_aws_s3_google_cloud_storage_azure_blob": {
+      "label": "Cloud storage (AWS S3, Google Cloud Storage, Azure Blob)",
+      "nonCommercial": {
+        "state": "included",
+        "raw": "✅ JCR only (not available in OSS or CE)"
+      },
+      "prox": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included (with custom S3 endpoints)"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included (with custom S3 endpoints)"
+      }
+    },
+    "filestore_sharding": {
+      "label": "Filestore sharding",
+      "nonCommercial": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "prox": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "high_availability_five_nines_uptime_redundant_cluster_unlimited_scalability": {
+      "label": "High availability (five-nines uptime, redundant cluster, unlimited scalability)",
+      "nonCommercial": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "prox": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "creation_and_promotion_of_release_bundles": {
+      "label": "Creation and promotion of release bundles",
+      "nonCommercial": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "prox": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "distribution_of_release_bundles_and_private_distribution_network": {
+      "label": "Distribution of release bundles and private distribution network",
+      "nonCommercial": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "prox": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "entx": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "project_based_management": {
+      "label": "Project-based management",
+      "nonCommercial": {
+        "state": "included",
+        "raw": "✅ 3 projects"
+      },
+      "prox": {
+        "state": "included",
+        "raw": "✅ 3 projects"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ 30 projects"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ 300 projects"
+      }
+    },
+    "scim_id_management_vault_integration_cold_storage": {
+      "label": "SCIM ID management, Vault integration, cold storage",
+      "nonCommercial": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "prox": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "access_federation_artifactory_edge": {
+      "label": "Access Federation, Artifactory Edge",
+      "nonCommercial": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "prox": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "entx": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "backups_email_notifications_free_upgrades": {
+      "label": "Backups, email notifications, free upgrades",
+      "nonCommercial": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "prox": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "sla_based_support": {
+      "label": "SLA-based support",
+      "nonCommercial": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "prox": {
+        "state": "included",
+        "raw": "✅ 24/7 SLA support"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ 24/7 SLA support"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ High Touch support"
+      }
+    }
+  },
+  "conflicts": [
+    {
+      "id": "jas-entx-included-vs-addon",
+      "severity": "review_required",
+      "tiers": [
+        "entx"
+      ],
+      "message": "The Product License Matrix marks JAS included for Enterprise X, while the Advanced Security page calls it an add-on. Do not auto-enable JAS from the base tier; verify the order.",
+      "sources": [
+        "productMatrix",
+        "advancedSecurity"
+      ]
+    }
+  ],
+  "policy": {
+    "contractOverridesPublicPackaging": true,
+    "ambiguousFeaturesAreNotAutoEnabled": true,
+    "note": "Public documentation is advisory for PS discovery. The signed order/SFDC contract is authoritative."
+  }
+}

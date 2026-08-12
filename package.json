@@ -1,0 +1,16 @@
+{
+  "name": "jfrog-license-entitlements",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "refresh": "node scripts/refresh-license-data.mjs",
+    "check": "node --check entitlements.js && node --check sf-product-map.js && node --check scripts/refresh-license-data.mjs && node scripts/test-sf-parse.mjs && node scripts/test-ui.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "jsdom": "^30.0.1"
+  }
+}

@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none';" />
+<title>JFrog License Entitlements Analyzer</title>
+<link rel="stylesheet" href="common.css" />
+</head>
+<body>
+
+<div class="wip-banner" role="note">
+  <strong>⚠️ Internal PS use only.</strong>
+  Not officially supported by JFrog. Entitlements change — always validate against the customer contract / SFDC order and your account team before architecture or SOW commitments.
+</div>
+
+<header>
+  <div class="header-top">
+    <h1>JFrog License Entitlements Analyzer</h1>
+    <span class="badge" id="data-freshness"></span>
+  </div>
+  <p>
+    Enter the platform license, quantity, add-ons, SaaS consumption, and security seats from the order —
+    plus IaaS provider and regions — to map entitlements and sketch the multi-site architecture.
+  </p>
+</header>
+
+<div class="layout">
+
+  <div class="panel" id="inputs">
+    <h2>Order inputs</h2>
+
+    <div class="field">
+      <label for="customerName">Customer name (optional)</label>
+      <input type="text" id="customerName" placeholder="Acme Corp" />
+    </div>
+
+    <div class="section-label">Platform license</div>
+
+    <div class="field">
+      <label>License type</label>
+      <div class="radio-group">
+        <label><input type="radio" name="platform" value="pro" /> Pro (SaaS)</label>
+        <label><input type="radio" name="platform" value="prox" /> Pro X</label>
+        <label><input type="radio" name="platform" value="entx" checked /> Enterprise X</label>
+        <label><input type="radio" name="platform" value="entplus" /> Enterprise +</label>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Deployment model</label>
+      <div class="radio-group">
+        <label><input type="radio" name="deployModel" value="saas" checked /> SaaS</label>
+        <label><input type="radio" name="deployModel" value="selfmanaged" /> Self-managed</label>
+        <label><input type="radio" name="deployModel" value="hybrid" /> Hybrid (SaaS + On-Prem)</label>
+      </div>
+      <span class="hint" id="deployHint"></span>
+    </div>
+
+    <div class="field" id="platformQtyBlock">
+      <label for="platformQty">Platform quantity (primary packs)</label>
+      <input type="number" id="platformQty" min="1" step="1" value="1" />
+      <span class="hint" id="platformQtyHint">SaaS: primary tenant packs. Self-managed: base packs (1 / 3 / 6 servers each by tier). Extra SaaS JPDs → Additional Platform Instance below.</span>
+    </div>
+
+    <div class="field-row two" id="hybridQtyBlock" style="display:none">
+      <div class="field">
+        <label for="saasPlatformQty">SaaS primary packs (Cloud Enterprise+ / X)</label>
+        <input type="number" id="saasPlatformQty" min="1" step="1" value="1" />
+      </div>
+      <div class="field">
+        <label for="selfManagedPlatformQty">On-Prem packs (Enterprise+ MP / X MP)</label>
+        <input type="number" id="selfManagedPlatformQty" min="1" step="1" value="1" />
+        <span class="hint">Customer can hold both SKUs at once — count each side separately.</span>
+      </div>
+    </div>
+
+    <div class="section-label">Topology (diagram)</div>
+
+    <div class="field">
+      <label>Default provider for new rows</label>
+      <div class="radio-group quad">
+        <label><input type="radio" name="iaas" value="aws" checked /> AWS</label>
+        <label><input type="radio" name="iaas" value="azure" /> Azure</label>
+        <label><input type="radio" name="iaas" value="gcp" /> GCP</label>
+        <label><input type="radio" name="iaas" value="onprem" /> On-Prem DC</label>
+      </div>
+      <span class="hint">Each region row has its own provider. Use this only as the default when you click <strong>+ Add region</strong>. Hybrid example: SaaS row on GCP + On-Prem JPS row on Azure.</span>
+    </div>
+
+    <div class="field">
+      <label>Regions &amp; what runs where</label>
+      <span class="hint" style="display:block;margin-bottom:8px">One row per location. Set <strong>Provider</strong> and <strong>Site</strong> (SaaS JPD vs On-Prem JPS) per row. A row needs at least one Primary / Additional / Edge count to appear in the diagram. Blank or non-geographic names (On-Prem DC, etc.) land in <strong>OTHER</strong>, separate from Central. Diagram groups into <strong>West | Central | East | Other</strong>.</span>
+      <div id="regionList"></div>
+      <div class="btn-row" style="margin-top:8px">
+        <button type="button" id="btnAddRegion">+ Add region</button>
+      </div>
+    </div>
+
+    <div class="field" id="edgeOpsField">
+      <label>Edge operations model</label>
+      <div class="radio-group">
+        <label><input type="radio" name="edgeOps" value="selfmanaged" checked /> Self-managed Edge (typical)</label>
+        <label><input type="radio" name="edgeOps" value="cloud" /> JFrog Cloud Edge</label>
+      </div>
+      <span class="hint">Most customer Edge POPs are self-managed and receive Release Bundles from Primary. Use Cloud Edge only when the order is JFrog-operated Distribution Cloud Edge Nodes.</span>
+    </div>
+
+    <div class="section-label">Additional products (SF names)</div>
+    <p class="hint" style="margin-top:-4px;margin-bottom:10px">Check what appears on the order. Labels match Salesforce where known. Qty = SKU quantity (or credits / buckets).</p>
+
+    <div class="addon-row" data-addon="unified">
+      <label><input type="checkbox" /> Unified Security Bundle</label>
+      <input type="number" min="1" step="1" value="1" title="Quantity" />
+    </div>
+    <div class="addon-row" data-addon="ultimate">
+      <label><input type="checkbox" /> Ultimate Security Bundle</label>
+      <input type="number" min="1" step="1" value="1" title="Quantity" />
+    </div>
+    <div class="addon-row" data-addon="curation">
+      <label><input type="checkbox" /> JFrog Curation Cloud / SH</label>
+      <input type="number" min="1" step="1" value="1" title="Quantity" />
+    </div>
+    <div class="addon-row" data-addon="jas">
+      <label><input type="checkbox" /> JFrog Advanced Security / JAS</label>
+      <input type="number" min="1" step="1" value="1" title="Quantity" />
+    </div>
+    <div class="addon-row" data-addon="catalog">
+      <label><input type="checkbox" /> JFrog AI Catalog</label>
+      <input type="number" min="1" step="1" value="1" title="Quantity" />
+    </div>
+    <div class="addon-row" data-addon="apptrust">
+      <label><input type="checkbox" /> JFrog App Trust</label>
+      <input type="number" min="1" step="1" value="1" title="Quantity" />
+    </div>
+    <div class="addon-row" data-addon="runtimeImpact">
+      <label><input type="checkbox" /> JFrog Runtime Impact</label>
+      <input type="number" min="1" step="1" value="1" title="Quantity" />
+    </div>
+    <div class="addon-row" data-addon="additionalInstances">
+      <label><input type="checkbox" /> Additional Platform Instance</label>
+      <input type="number" min="1" step="1" value="1" title="Quantity" />
+    </div>
+    <div class="addon-row" data-addon="edge">
+      <label><input type="checkbox" /> Distribution Cloud Edge Nodes</label>
+      <input type="number" min="1" step="1" value="1" title="Quantity" />
+    </div>
+    <div class="addon-row" data-addon="additionalServers">
+      <label><input type="checkbox" /> Additional Artifactory servers (SH)</label>
+      <input type="number" min="1" step="1" value="1" title="Quantity" />
+    </div>
+    <div class="addon-row" data-addon="mlCredits">
+      <label><input type="checkbox" /> JFrog ML / Additional Credits</label>
+      <input type="number" min="1" step="1" value="2000" title="Credits" />
+    </div>
+    <div class="addon-row" data-addon="projectBuckets">
+      <label><input type="checkbox" /> Additional Projects</label>
+      <input type="number" min="1" step="1" value="1" title="Quantity" />
+    </div>
+    <div class="addon-row" data-addon="smartArchiving">
+      <label><input type="checkbox" /> Smart Archiving Consumption</label>
+      <input type="number" min="1" step="1" value="1" title="Quantity" />
+    </div>
+    <div class="addon-row" data-addon="premiumAvailability">
+      <label><input type="checkbox" /> JFrog Premium Availability</label>
+      <input type="number" min="1" step="1" value="1" title="Quantity" />
+    </div>
+
+    <div class="section-label">Capacity from the order</div>
+
+    <div id="saasStorageBlock">
+      <div class="field">
+        <label for="saasUnits">SaaSInstance units (storage)</label>
+        <input type="number" id="saasUnits" min="0" step="1" value="0" />
+        <span class="hint">Number of storage / consumption units on the order line. Leave 0 to use published base (Pro 25 GB / Ent X 125 GB).</span>
+      </div>
+      <div class="field">
+        <label for="saasUnitSizeGB">GB per SaaSInstance unit</label>
+        <input type="number" id="saasUnitSizeGB" min="1" step="1" value="1000" />
+        <span class="hint">Default 1000 = 1 TB per unit. Change if the order defines a different unit size.</span>
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="securitySeats">Security seats (contributing developers)</label>
+      <input type="number" id="securitySeats" min="0" step="1" value="0" />
+      <span class="hint">From the AdvSec / Unified / Ultimate order line. Leave 0 to use the daily Pricing base for the platform tier (currently Ent X 50 / Ent+ 200).</span>
+    </div>
+
+    <div class="field">
+      <label for="orderNotes">Order notes / Salesforce paste</label>
+      <textarea id="orderNotes" rows="6" placeholder="Paste SF opportunity lines here (Product, Qty, # Units, Provider, Region)…"></textarea>
+      <span class="hint">Paste tab-separated SF opportunity lines here, then click <strong>Analyze entitlements</strong> (or <strong>Parse SF paste</strong>). The tool fills license type, add-ons, seats, consumption, IaaS, and region topology automatically.</span>
+    </div>
+
+    <div class="btn-row">
+      <button type="button" class="primary" id="btnAnalyze">Analyze entitlements</button>
+      <button type="button" id="btnParseSf">Parse SF paste</button>
+      <button type="button" id="btnExample">Load example</button>
+      <button type="button" id="btnExport">Export JSON</button>
+      <button type="button" id="btnImport">Import JSON</button>
+      <input type="file" id="importFile" accept="application/json,.json" hidden />
+      <button type="button" id="btnReset">Reset</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Entitlement results</h2>
+    <div id="results">
+      <div class="results-empty">Enter the license details from the order form, then click <strong>Analyze entitlements</strong>.</div>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  Sources:
+  <a href="https://jfrog.com/pricing/" target="_blank" rel="noopener">JFrog Pricing</a> ·
+  <a href="https://docs.jfrog.com/projects/docs/projects-subscription-allocation" target="_blank" rel="noopener">Projects allocation</a> ·
+  <a href="https://docs.jfrog.com/installation/docs/feature-comparison-matrix-for-self-mangaged-jpds" target="_blank" rel="noopener">Feature matrix</a> ·
+  Sibling: <span class="mono">new-member-onboarding-labs</span> Ch 03 ·
+  Sizing: <span class="mono">jfrog-sizing</span>
+</footer>
+
+<script src="license-data.js"></script>
+<script src="sf-product-map.js"></script>
+<script src="entitlements.js"></script>
+</body>
+</html>
