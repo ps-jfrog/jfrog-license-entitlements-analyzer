@@ -145,4 +145,25 @@ const centralSvg = window.__lastDiagramSvg || "";
 assert(/CENTRAL REGIONS/.test(centralSvg), "us-central1 must stay in CENTRAL");
 assert(!/OTHER \/ UNDEFINED/.test(centralSvg), "true central geo must not open OTHER column");
 
+// Report export: HTML/PDF buttons must exist and produce a self-contained document
+// from the currently rendered results, with interactive controls stripped out.
+assert($("btnExportHtml"), "btnExportHtml missing from DOM");
+assert($("btnExportPdf"), "btnExportPdf missing from DOM");
+assert(window.hasReportContent(), "hasReportContent should be true after Analyze");
+
+$("customerName").value = "Acme Corp";
+$("btnAnalyze").click();
+const { html: reportHtml, filenameBase } = window.buildReportDocument();
+assert(filenameBase === "acme-corp", `unexpected report filename base: ${filenameBase}`);
+assert(reportHtml.includes("<svg"), "report is missing the architecture diagram");
+assert(reportHtml.includes("Acme Corp"), "report is missing the customer name");
+assert(/result-block/.test(reportHtml), "report is missing result sections");
+assert(!/id="btnDownloadDiagram"/.test(reportHtml), "report should not include interactive buttons");
+assert(!/<button/.test(reportHtml), "report should not include any <button> elements");
+
+$("regionList").innerHTML = "";
+$("customerName").value = "";
+window.render(null);
+assert(!window.hasReportContent(), "hasReportContent should be false before any Analyze");
+
 console.log("UI smoke tests passed.");

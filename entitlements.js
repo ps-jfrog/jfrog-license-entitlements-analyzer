@@ -2052,6 +2052,121 @@ function exportJson() {
   URL.revokeObjectURL(a.href);
 }
 
+const REPORT_CSS = `
+:root{--bg:#ffffff;--panel-2:#f2f3f6;--border:#d8dbe2;--text:#1b1e24;--muted:#5b6270;--accent:#1f8f4d;--warn:#a86400;--danger:#b83227;--info:#1f6fb2;--chip:#eef0f3;--included:rgba(31,143,77,0.12);--excluded:rgba(184,50,39,0.10);--partial:rgba(168,100,0,0.12);}
+*{box-sizing:border-box;}
+body{margin:0;padding:24px 32px 48px;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:1.5;}
+h1{font-size:20px;margin:0 0 4px;}
+.report-meta{color:var(--muted);font-size:12px;margin:0 0 6px;}
+.summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:18px 0;}
+.stat-card{background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;}
+.stat-card .label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;}
+.stat-card .value{margin-top:4px;font-size:20px;font-weight:600;}
+.stat-card .sub{margin-top:2px;font-size:11px;color:var(--muted);}
+.banner{border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:13px;border:1px solid;}
+.banner.warn{background:var(--partial);border-color:var(--warn);}
+.banner.danger{background:var(--excluded);border-color:var(--danger);}
+.banner.info{background:rgba(31,111,178,.10);border-color:var(--info);}
+.banner.ok{background:var(--included);border-color:var(--accent);}
+.result-block{margin-top:18px;break-inside:avoid;page-break-inside:avoid;}
+.result-block h3{margin:0 0 10px;font-size:14px;font-weight:600;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:top;}
+th{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em;font-weight:600;}
+.status{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;border:1px solid transparent;}
+.status.included{background:var(--included);color:var(--accent);border-color:rgba(31,143,77,.35);}
+.status.excluded{background:var(--excluded);color:var(--danger);border-color:rgba(184,50,39,.35);}
+.status.addon{background:var(--partial);color:var(--warn);border-color:rgba(168,100,0,.4);}
+.status.partial{background:rgba(31,111,178,.10);color:var(--info);border-color:rgba(31,111,178,.35);}
+.chip-row{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 0;}
+.chip{background:var(--chip);border:1px solid var(--border);border-radius:999px;padding:3px 10px;font-size:11px;}
+.chip.good{border-color:rgba(31,143,77,.45);color:var(--accent);}
+.chip.bad{border-color:rgba(184,50,39,.45);color:var(--danger);}
+.chip.warn{border-color:rgba(168,100,0,.45);color:var(--warn);}
+.checklist{list-style:none;margin:0;padding:0;}
+.checklist li{position:relative;padding:8px 10px 8px 28px;border-bottom:1px solid var(--border);font-size:13px;}
+.checklist li::before{content:"\\2610";position:absolute;left:8px;color:var(--muted);}
+.checklist li strong{color:var(--text);}
+.muted{color:var(--muted);}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;}
+.diagram-wrap{margin-top:10px;overflow-x:auto;border:1px solid var(--border);border-radius:8px;background:var(--panel-2);padding:12px;}
+.diagram-wrap svg{display:block;margin:0 auto;max-width:100%;}
+.diagram-legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;font-size:11px;color:var(--muted);}
+.diagram-legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px;border:1px solid var(--border);}
+.diagram-legend .lg-primary::before{background:rgba(31,143,77,.25);border-color:var(--accent);}
+.diagram-legend .lg-additional::before{background:rgba(31,111,178,.2);border-color:var(--info);}
+.diagram-legend .lg-edge::before{background:rgba(168,100,0,.15);border-color:var(--warn);}
+.diagram-legend .lg-link::before{background:transparent;border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);}
+.latest-reference details{margin-top:10px;background:var(--panel-2);border:1px solid var(--border);border-radius:7px;overflow:hidden;}
+.latest-reference summary{cursor:pointer;padding:10px 12px;font-size:12px;font-weight:600;}
+.btn-row,button{display:none !important;}
+@media print{
+  body{padding:0 12px;}
+  .result-block{break-inside:avoid;page-break-inside:avoid;}
+  a{color:inherit;text-decoration:none;}
+}
+`;
+
+function buildReportDocument() {
+  const resultsNode = $("results").cloneNode(true);
+  resultsNode.querySelectorAll(".btn-row, button").forEach((el) => el.remove());
+  const customerName = $("customerName")?.value?.trim() || "";
+  const generated = new Date().toISOString().slice(0, 10);
+  const filenameBase = (customerName || "customer").replace(/\s+/g, "-").toLowerCase();
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>JFrog License Entitlements${customerName ? ` — ${esc(customerName)}` : ""}</title>
+<style>${REPORT_CSS}</style>
+</head>
+<body>
+  <h1>JFrog License Entitlements Analyzer</h1>
+  ${customerName ? `<p class="report-meta">Customer: <strong>${esc(customerName)}</strong></p>` : ""}
+  <p class="report-meta">Generated ${generated} · Data as of ${esc(DATA_AS_OF || "")}</p>
+  <p class="report-meta">Internal PS use only. Not officially supported by JFrog. Entitlements change — validate against the customer contract / SFDC order before architecture or SOW commitments.</p>
+  ${resultsNode.innerHTML}
+</body>
+</html>`;
+  return { html, filenameBase };
+}
+
+function hasReportContent() {
+  return !$("results")?.querySelector(".results-empty");
+}
+
+function exportReportHtml() {
+  if (!hasReportContent()) {
+    alert("Click \"Analyze entitlements\" first, then export the report.");
+    return;
+  }
+  const { html, filenameBase } = buildReportDocument();
+  const blob = new Blob([html], { type: "text/html" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `jfrog-entitlements-${filenameBase}.html`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function exportReportPdf() {
+  if (!hasReportContent()) {
+    alert("Click \"Analyze entitlements\" first, then export the report.");
+    return;
+  }
+  const { html } = buildReportDocument();
+  const win = window.open("", "_blank");
+  if (!win) {
+    alert("Pop-up blocked — allow pop-ups for this site to export a PDF, or use \"Export report (HTML)\" and print that file to PDF instead.");
+    return;
+  }
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  setTimeout(() => win.print(), 350);
+}
+
 function setRadio(name, value, fallback) {
   const wanted = value || fallback;
   const el = document.querySelector(`input[name="${name}"][value="${wanted}"]`)
@@ -2786,6 +2901,8 @@ document.addEventListener("DOMContentLoaded", () => {
   $("btnExample")?.addEventListener("click", loadExample);
   $("btnReset")?.addEventListener("click", resetForm);
   $("btnExport")?.addEventListener("click", exportJson);
+  $("btnExportHtml")?.addEventListener("click", exportReportHtml);
+  $("btnExportPdf")?.addEventListener("click", exportReportPdf);
   $("btnImport")?.addEventListener("click", triggerImport);
   $("btnParseSf")?.addEventListener("click", parseSfFromNotes);
   $("importFile")?.addEventListener("change", (e) => {
