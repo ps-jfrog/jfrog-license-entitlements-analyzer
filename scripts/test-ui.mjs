@@ -119,6 +119,59 @@ function footerNoOverlap(markup, label) {
 }
 footerNoOverlap(svg, "hybrid");
 
+// Full topology (primary + additional + edge) exercises both animated flows and
+// gives the draw.io export something to connect.
+$("regionList").innerHTML = "";
+window.addRegionRow({ iaas: "aws", siteKind: "saas", region: "us-west-2", primary: 1 });
+window.addRegionRow({ iaas: "aws", siteKind: "saas", region: "us-east-1", additional: 1 });
+window.addRegionRow({ iaas: "onprem", siteKind: "selfmanaged", region: "Edge POP", edge: 2 });
+$("btnAnalyze").click();
+const flowSvg = window.__lastDiagramSvg || "";
+
+// Animation ships inside the SVG so downloaded files animate too, is svg-scoped so it
+// cannot leak into the host page (inline SVG shares the document style scope), and is pausable.
+const styleBlock = (flowSvg.match(/<style>([\s\S]*?)<\/style>/) || [])[1];
+assert(styleBlock, "diagram is missing its inline animation stylesheet");
+assert(/@keyframes jfd-flow-fed/.test(styleBlock) && /@keyframes jfd-flow-dist/.test(styleBlock), "flow keyframes missing");
+assert(/prefers-reduced-motion/.test(styleBlock), "animation must honour prefers-reduced-motion");
+assert(/svg\.jfd-paused \.jfd-flow\s*\{\s*animation:\s*none/.test(styleBlock), "paused state must stop the animation");
+styleBlock.split("\n")
+  .map((line) => line.trim())
+  .filter((line) => line.includes("{") && !line.startsWith("@") && !line.startsWith("to{"))
+  .forEach((line) => {
+    assert(/^svg[.\s]/.test(line), `diagram CSS rule "${line}" is not svg-scoped and would leak into the page`);
+  });
+assert(/class="jfd-flow jfd-flow-fed"/.test(flowSvg), "federation connectors are not animated");
+assert(/class="jfd-flow jfd-flow-dist"/.test(flowSvg), "distribution connectors are not animated");
+
+const mountedDiagram = window.document.querySelector("#results .diagram-wrap svg");
+assert(mountedDiagram, "diagram is not mounted in the results panel");
+$("btnToggleDiagramAnimation").click();
+assert(mountedDiagram.classList.contains("jfd-paused"), "pause button must stop the animation");
+assert($("btnToggleDiagramAnimation").textContent === "Play animation", "pause button label must flip to Play");
+$("btnToggleDiagramAnimation").click();
+assert(!mountedDiagram.classList.contains("jfd-paused"), "second click must resume the animation");
+assert($("btnDownloadDrawio"), "draw.io download button missing from the diagram block");
+
+// draw.io export: native shapes plus real connected edges with flow animation,
+// which is what makes the file importable into Lucidchart.
+const drawio = window.__lastDiagramDrawio || "";
+assert(/^<\?xml version="1\.0" encoding="UTF-8"\?>\n<mxfile /.test(drawio), "draw.io export is not an mxfile document");
+assert(/<mxGraphModel /.test(drawio) && /<root>/.test(drawio), "draw.io export is missing the graph model");
+assert(/Primary JPD 1/.test(drawio) && /Additional Instance 1/.test(drawio) && /Edge 2/.test(drawio),
+  "draw.io export is missing topology nodes");
+assert(!/<svg|&lt;svg/.test(drawio), "draw.io export must be native shapes, not an embedded image");
+const drawioNodeIds = [...drawio.matchAll(/<mxCell id="(n\d+)"/g)].map((m) => m[1]);
+assert(drawioNodeIds.length === 4, `expected 4 draw.io node shapes, got ${drawioNodeIds.length}`);
+assert(new Set(drawioNodeIds).size === drawioNodeIds.length, "draw.io node ids must be unique");
+const drawioEdges = [...drawio.matchAll(/style="([^"]*)" edge="1" parent="1" source="([^"]+)" target="([^"]+)"/g)];
+assert(drawioEdges.length === 3, `expected 3 draw.io connectors (1 federation + 2 distribution), got ${drawioEdges.length}`);
+drawioEdges.forEach(([, style, source, target]) => {
+  assert(/flowAnimation=1/.test(style), "draw.io edges must carry flowAnimation=1");
+  assert(drawioNodeIds.includes(source) && drawioNodeIds.includes(target),
+    `draw.io edge points at a missing shape (${source} -> ${target})`);
+});
+
 // Narrow single-region SaaS with edges + consumption — the case the user reported spilling.
 $("regionList").innerHTML = "";
 window.document.querySelector('input[name="deployModel"][value="saas"]').checked = true;

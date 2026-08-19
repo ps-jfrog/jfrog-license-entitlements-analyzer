@@ -1217,58 +1217,78 @@ function buildArchitectureLegacySvg(model) {
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px;height:auto" xmlns="http://www.w3.org/2000/svg">${parts.join("")}</svg>`;
 }
 
-function buildArchitectureSvg(model) {
-  const C = {
-    bg: "#0c0e12",
-    lane: "#11151b",
-    cell: "#171a21",
-    border: "#2a2f3a",
-    accent: "#40bf6a",
-    info: "#4aa3ff",
-    warn: "#f5a623",
-    primary: "#13251a",
-    additional: "#132033",
-    edge: "#2a230f",
-    txt: "#e6e8ee",
-    muted: "#9aa3b2",
-  };
+const ARCH_COLORS = {
+  bg: "#0c0e12",
+  lane: "#11151b",
+  cell: "#171a21",
+  border: "#2a2f3a",
+  accent: "#40bf6a",
+  info: "#4aa3ff",
+  warn: "#f5a623",
+  primary: "#13251a",
+  additional: "#132033",
+  edge: "#2a230f",
+  txt: "#e6e8ee",
+  muted: "#9aa3b2",
+};
 
+const ARCH_LANE_LABELS = {
+  west: "WEST REGIONS",
+  central: "CENTRAL REGIONS",
+  east: "EAST REGIONS",
+  other: "OTHER / UNDEFINED",
+};
+
+// Inline SVG shares the host document's style scope, so every selector is svg-scoped
+// and jfd-prefixed. Keeping the rules inside the <svg> also keeps the downloaded file animated.
+const ARCH_FLOW_STYLE = `<style>
+svg .jfd-flow-fed{stroke-dasharray:14 6;animation:jfd-flow-fed 1.4s linear infinite;}
+svg .jfd-flow-dist{stroke-dasharray:6 5;animation:jfd-flow-dist 1.4s linear infinite;}
+@keyframes jfd-flow-fed{to{stroke-dashoffset:-40;}}
+@keyframes jfd-flow-dist{to{stroke-dashoffset:-44;}}
+svg.jfd-paused .jfd-flow{animation:none;}
+@media (prefers-reduced-motion:reduce){svg .jfd-flow{animation:none;}}
+</style>`;
+
+function architectureLane(region) {
+  const value = String(region || "").toLowerCase().trim();
+  if (!value
+    || value === "(undefined)"
+    || value === "undefined"
+    || value === "unspecified"
+    || value === "n/a"
+    || value === "-"
+    || value === "custom…") {
+    return "other";
+  }
+  // On-Prem / DC site names are not cloud geography — keep them out of Central.
+  if (/^(primary|secondary)\s*dc\b|^dr\s*site\b|^edge\s*pop\b|^on[- ]?prem\b|^data\s*center\b|^datacenter\b|^dc\b/.test(value)) {
+    return "other";
+  }
+  const central = /(central|midwest|mid-|iowa|texas|chicago|us-central|centralus|northcentral|southcentral)/;
+  const west = /(west|western|california|oregon|washington|seattle|london|uk|europe-west|westeurope|northeurope|france|brazil|southamerica)/;
+  const east = /(east|eastern|virginia|new york|tokyo|singapore|sydney|india|asia|japan)/;
+  if (central.test(value)) return "central";
+  if (west.test(value)) return "west";
+  if (east.test(value)) return "east";
+  return "other";
+}
+
+/**
+ * Single geometry pass shared by the on-page SVG and the draw.io export so the two
+ * never drift. Coordinates are plain pixels usable by both renderers.
+ */
+function architectureLayout(model) {
   const primaries = model.primaries || [];
   const additionals = model.additionals || [];
   const edgeNodes = model.edgeNodes || [];
   const edgeSelfManaged = (model.edgeOps || "selfmanaged") === "selfmanaged";
 
-  const allLaneKeys = ["west", "central", "east", "other"];
-  const laneLabels = {
-    west: "WEST REGIONS",
-    central: "CENTRAL REGIONS",
-    east: "EAST REGIONS",
-    other: "OTHER / UNDEFINED",
-  };
-
-  function geographicLane(region) {
-    const value = String(region || "").toLowerCase().trim();
-    if (!value
-      || value === "(undefined)"
-      || value === "undefined"
-      || value === "unspecified"
-      || value === "n/a"
-      || value === "-"
-      || value === "custom…") {
-      return "other";
-    }
-    // On-Prem / DC site names are not cloud geography — keep them out of Central.
-    if (/^(primary|secondary)\s*dc\b|^dr\s*site\b|^edge\s*pop\b|^on[- ]?prem\b|^data\s*center\b|^datacenter\b|^dc\b/.test(value)) {
-      return "other";
-    }
-    const central = /(central|midwest|mid-|iowa|texas|chicago|us-central|centralus|northcentral|southcentral)/;
-    const west = /(west|western|california|oregon|washington|seattle|london|uk|europe-west|westeurope|northeurope|france|brazil|southamerica)/;
-    const east = /(east|eastern|virginia|new york|tokyo|singapore|sydney|india|asia|japan)/;
-    if (central.test(value)) return "central";
-    if (west.test(value)) return "west";
-    if (east.test(value)) return "east";
-    return "other";
-  }
+  const deployLabel = model.deployModel === "saas"
+    ? "SaaS"
+    : model.deployModel === "hybrid" ? "Hybrid SaaS + On-Prem" : "Self-managed";
+  const titleText = `${model.iaasLabel} · ${model.tierName} · ${deployLabel}`;
+  const productText = model.products.length ? model.products.join(" · ") : "Platform baseline";
 
   const rows = [
     { key: "primary", label: "1 · PRIMARY", items: primaries },
@@ -1277,21 +1297,15 @@ function buildArchitectureSvg(model) {
   ].filter((row) => row.items.length > 0);
 
   if (!rows.length) {
-    const W = 640;
-    const H = 150;
-    return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px;height:auto" xmlns="http://www.w3.org/2000/svg">
-      <rect x="0" y="0" width="${W}" height="${H}" rx="10" fill="${C.bg}" stroke="${C.border}"/>
-      <text x="${W / 2}" y="66" fill="${C.txt}" font-size="14" font-weight="600" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif">No region-specific deployments to draw</text>
-      <text x="${W / 2}" y="92" fill="${C.muted}" font-size="11" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif">Assign a region to Primary, Additional, or Edge rows to include them.</text>
-    </svg>`;
+    return { empty: true, W: 640, H: 150, titleText, productText };
   }
 
   const buckets = {};
   rows.forEach((row) => {
     buckets[row.key] = { west: [], central: [], east: [], other: [] };
-    row.items.forEach((item) => buckets[row.key][geographicLane(item.region)].push(item));
+    row.items.forEach((item) => buckets[row.key][architectureLane(item.region)].push(item));
   });
-  const laneKeys = allLaneKeys.filter((lane) =>
+  const laneKeys = ["west", "central", "east", "other"].filter((lane) =>
     rows.some((row) => buckets[row.key][lane].length > 0)
   );
 
@@ -1308,25 +1322,16 @@ function buildArchitectureSvg(model) {
   const rowGap = 34;
   const cellPad = 12;
 
-  function rowHeight(row) {
-    const maxCount = Math.max(...laneKeys.map((lane) => buckets[row.key][lane].length), 1);
-    return cellPad * 2 + maxCount * boxH + Math.max(0, maxCount - 1) * boxGapY;
-  }
-
   let gridH = 0;
   const rowLayout = [];
   rows.forEach((row, index) => {
-    const h = rowHeight(row);
-    rowLayout.push({ ...row, y: headerH + gridH, h });
+    const maxCount = Math.max(...laneKeys.map((lane) => buckets[row.key][lane].length), 1);
+    const h = cellPad * 2 + maxCount * boxH + Math.max(0, maxCount - 1) * boxGapY;
+    rowLayout.push({ key: row.key, label: row.label, y: headerH + gridH, h });
     gridH += h;
     if (index < rows.length - 1) gridH += rowGap;
   });
 
-  const deployLabel = model.deployModel === "saas"
-    ? "SaaS"
-    : model.deployModel === "hybrid" ? "Hybrid SaaS + On-Prem" : "Self-managed";
-  const titleText = `${model.iaasLabel} · ${model.tierName} · ${deployLabel}`;
-  const productText = model.products.length ? model.products.join(" · ") : "Platform baseline";
   // Rough advance-width estimate so long titles/product lists widen the canvas instead of overflowing it.
   const textW = (text, size) => text.length * size * 0.58;
 
@@ -1354,62 +1359,27 @@ function buildArchitectureSvg(model) {
   const extraFooterH = footerStacked ? 16 : 0;
   const H = headerH + gridH + footerH + extraFooterH + pad;
 
-  const escSvg = (value) => esc(value);
-  const T = (x, y, value, options = {}) =>
-    `<text x="${x}" y="${y}" fill="${options.fill || C.txt}" font-size="${options.size || 12}" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif"${options.weight ? ` font-weight="${options.weight}"` : ""}${options.anchor ? ` text-anchor="${options.anchor}"` : ""}>${escSvg(value)}</text>`;
-  const RECT = (x, y, w, h, fill, stroke, rx = 8, dash = false) =>
-    `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}" fill="${fill}" stroke="${stroke}" stroke-width="1"${dash ? ` stroke-dasharray="5 4"` : ""}/>`;
+  const laneX = (lane) => gridX + laneKeys.indexOf(lane) * (laneW + laneGap);
+  const lanes = laneKeys.map((lane) => ({
+    key: lane,
+    label: ARCH_LANE_LABELS[lane],
+    x: laneX(lane),
+    y: laneTop,
+    w: laneW,
+    h: H - laneTop - footerH,
+  }));
 
-  function laneX(lane) {
-    return gridX + laneKeys.indexOf(lane) * (laneW + laneGap);
-  }
-
-  function nodeBox(x, y, title, sub, kind) {
-    const fill = kind === "primary" ? C.primary : kind === "edge" ? C.edge : C.additional;
-    const stroke = kind === "primary" ? C.accent : kind === "edge" ? C.warn : C.info;
-    return RECT(x, y, boxW, boxH, fill, stroke, 6)
-      + T(x + 11, y + 19, title, { weight: 600, size: 12 })
-      + T(x + 11, y + 36, sub, { fill: C.muted, size: 10 });
-  }
-
-  const background = [];
-  const connectors = [];
+  const cells = [];
   const nodes = [];
   const anchors = { primary: [], additional: [], edge: [] };
 
-  background.push(RECT(0, 0, W, H, C.bg, C.border, 10));
-  background.push(T(pad, 26, titleText, { weight: 600, size: 14 }));
-  background.push(T(pad, 44, productText, { fill: C.muted, size: 11 }));
-
-  background.push(`<defs>
-    <marker id="geo-green" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="${C.accent}"/></marker>
-    <marker id="geo-amber" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="${C.warn}"/></marker>
-  </defs>`);
-
-  // Geography columns: west is always left, unknown/central is middle, east is right.
-  laneKeys.forEach((lane) => {
-    const x = laneX(lane);
-    background.push(RECT(x, laneTop, laneW, H - laneTop - footerH, C.lane, C.border, 8));
-    background.push(T(x + laneW / 2, laneTop + 20, laneLabels[lane], { fill: C.muted, size: 10, weight: 600, anchor: "middle" }));
-  });
-
   rowLayout.forEach((row) => {
-    background.push(T(pad + roleW - 10, row.y + 22, row.label, {
-      fill: row.key === "edge" ? C.warn : row.key === "additional" ? C.info : C.accent,
-      size: 10,
-      weight: 600,
-      anchor: "end",
-    }));
-
     laneKeys.forEach((lane) => {
       const x = laneX(lane);
-      const stroke = row.key === "edge" ? C.warn : row.key === "additional" ? C.info : C.border;
-      background.push(RECT(x + 6, row.y, laneW - 12, row.h, C.cell, stroke, 7, row.key === "edge"));
+      cells.push({ rowKey: row.key, lane, x: x + 6, y: row.y, w: laneW - 12, h: row.h });
 
-      const items = buckets[row.key][lane];
       let y = row.y + cellPad;
-      items.forEach((item) => {
-        const boxX = x + (laneW - boxW) / 2;
+      buckets[row.key][lane].forEach((item) => {
         const provider = IAAS_LABELS[item.iaas] || item.iaas || model.iaasLabel || "";
         const siteSaas = (item.siteKind || "saas") === "saas";
         let title;
@@ -1424,67 +1394,322 @@ function buildArchitectureSvg(model) {
           title = `Edge ${item.index}`;
           sub = `${provider} · ${item.region} · ${edgeSelfManaged ? "self-managed" : "Cloud Edge"}`;
         }
-        nodes.push(nodeBox(boxX, y, title, sub, row.key));
-        anchors[row.key].push({
-          x: boxX + boxW / 2,
-          top: y,
-          bottom: y + boxH,
+        const node = {
+          id: `n${nodes.length + 1}`,
+          rowKey: row.key,
           lane,
-        });
+          x: x + (laneW - boxW) / 2,
+          y,
+          w: boxW,
+          h: boxH,
+          title,
+          sub,
+        };
+        nodes.push(node);
+        anchors[row.key].push(node);
         y += boxH + boxGapY;
       });
     });
   });
 
+  const centerX = (node) => node.x + node.w / 2;
+  const visibleGridW = laneKeys.length * laneW + Math.max(0, laneKeys.length - 1) * laneGap;
+  const labelX = gridX + visibleGridW / 2;
+
   // Primary → Additional uses one clean green bus in the row gap.
+  let federation = null;
   if (anchors.primary.length && anchors.additional.length) {
     const source = anchors.primary[0];
     const primaryRow = rowLayout.find((row) => row.key === "primary");
-    const additionalRow = rowLayout.find((row) => row.key === "additional");
     const busY = primaryRow.y + primaryRow.h + rowGap / 2;
-    const destinationXs = anchors.additional.map((anchor) => anchor.x);
-    const minX = Math.min(source.x, ...destinationXs);
-    const maxX = Math.max(source.x, ...destinationXs);
-    connectors.push(`<line x1="${source.x}" y1="${source.bottom}" x2="${source.x}" y2="${busY}" stroke="${C.accent}" stroke-width="1.4"/>`);
-    connectors.push(`<line x1="${minX}" y1="${busY}" x2="${maxX}" y2="${busY}" stroke="${C.accent}" stroke-width="1.4"/>`);
-    anchors.additional.forEach((anchor) => {
-      connectors.push(`<line x1="${anchor.x}" y1="${busY}" x2="${anchor.x}" y2="${anchor.top}" stroke="${C.accent}" stroke-width="1.4" marker-end="url(#geo-green)"/>`);
-    });
-    const visibleGridW = laneKeys.length * laneW + Math.max(0, laneKeys.length - 1) * laneGap;
-    connectors.push(T(gridX + visibleGridW / 2, busY - 5, model.accessFederation ? "Access + Repository Federation" : "Repository Federation", { fill: C.accent, size: 9, anchor: "middle" }));
+    const destinationXs = anchors.additional.map(centerX);
+    federation = {
+      source,
+      targets: anchors.additional,
+      busY,
+      labelX,
+      sourceX: centerX(source),
+      sourceBottom: source.y + source.h,
+      minX: Math.min(centerX(source), ...destinationXs),
+      maxX: Math.max(centerX(source), ...destinationXs),
+      label: model.accessFederation ? "Access + Repository Federation" : "Repository Federation",
+    };
   }
 
   // Primary → Edge uses a separate amber bus immediately above the Edge row.
+  let distribution = null;
   if (anchors.primary.length && anchors.edge.length) {
     const source = anchors.primary[0];
     const edgeRow = rowLayout.find((row) => row.key === "edge");
     const busY = edgeRow.y - rowGap / 2;
     const routeX = gridX - 24;
-    const destinationXs = anchors.edge.map((anchor) => anchor.x);
-    const minX = Math.min(routeX, ...destinationXs);
-    const maxX = Math.max(routeX, ...destinationXs);
-    connectors.push(`<path d="M ${source.x} ${source.bottom} L ${routeX} ${source.bottom} L ${routeX} ${busY}" fill="none" stroke="${C.warn}" stroke-width="1.6" stroke-dasharray="6 4"/>`);
-    connectors.push(`<line x1="${minX}" y1="${busY}" x2="${maxX}" y2="${busY}" stroke="${C.warn}" stroke-width="1.6" stroke-dasharray="6 4"/>`);
-    anchors.edge.forEach((anchor) => {
-      connectors.push(`<line x1="${anchor.x}" y1="${busY}" x2="${anchor.x}" y2="${anchor.top}" stroke="${C.warn}" stroke-width="1.6" stroke-dasharray="6 4" marker-end="url(#geo-amber)"/>`);
-    });
-    const visibleGridW = laneKeys.length * laneW + Math.max(0, laneKeys.length - 1) * laneGap;
-    connectors.push(T(gridX + visibleGridW / 2, busY - 5, "Distribution push · Release Bundles → Edge", { fill: C.warn, size: 9, weight: 600, anchor: "middle" }));
+    const destinationXs = anchors.edge.map(centerX);
+    distribution = {
+      source,
+      targets: anchors.edge,
+      busY,
+      routeX,
+      labelX,
+      sourceX: centerX(source),
+      sourceBottom: source.y + source.h,
+      minX: Math.min(routeX, ...destinationXs),
+      maxX: Math.max(routeX, ...destinationXs),
+      label: "Distribution push · Release Bundles → Edge",
+    };
   }
 
-  if (footerStacked) {
-    background.push(T(W - pad, H - 30, footerRight, { fill: C.muted, size: 10, anchor: "end" }));
-    background.push(T(pad, H - 14, footerLeft, { fill: C.muted, size: 11 }));
-  } else {
-    background.push(T(pad, H - 14, footerLeft, { fill: C.muted, size: 11 }));
-    background.push(T(W - pad, H - 14, footerRight, { fill: C.muted, size: 10, anchor: "end" }));
-  }
-
-  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px;height:auto" xmlns="http://www.w3.org/2000/svg">${background.join("")}${connectors.join("")}${nodes.join("")}</svg>`;
+  return {
+    empty: false,
+    W,
+    H,
+    pad,
+    roleW,
+    laneTop,
+    footerH,
+    lanes,
+    rows: rowLayout,
+    cells,
+    nodes,
+    federation,
+    distribution,
+    titleText,
+    productText,
+    footerLeft,
+    footerRight,
+    footerStacked,
+  };
 }
 
-function downloadSvg(filename, svgMarkup) {
-  const blob = new Blob([svgMarkup], { type: "image/svg+xml" });
+function buildArchitectureSvg(model) {
+  const C = ARCH_COLORS;
+  const layout = architectureLayout(model);
+  const { W, H } = layout;
+
+  const T = (x, y, value, options = {}) =>
+    `<text x="${x}" y="${y}" fill="${options.fill || C.txt}" font-size="${options.size || 12}" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif"${options.weight ? ` font-weight="${options.weight}"` : ""}${options.anchor ? ` text-anchor="${options.anchor}"` : ""}>${esc(value)}</text>`;
+  const RECT = (x, y, w, h, fill, stroke, rx = 8, dash = false) =>
+    `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}" fill="${fill}" stroke="${stroke}" stroke-width="1"${dash ? ` stroke-dasharray="5 4"` : ""}/>`;
+
+  if (layout.empty) {
+    return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px;height:auto" xmlns="http://www.w3.org/2000/svg">
+      <rect x="0" y="0" width="${W}" height="${H}" rx="10" fill="${C.bg}" stroke="${C.border}"/>
+      <text x="${W / 2}" y="66" fill="${C.txt}" font-size="14" font-weight="600" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif">No region-specific deployments to draw</text>
+      <text x="${W / 2}" y="92" fill="${C.muted}" font-size="11" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif">Assign a region to Primary, Additional, or Edge rows to include them.</text>
+    </svg>`;
+  }
+
+  const pad = layout.pad;
+  const background = [];
+  const connectors = [];
+  const nodes = [];
+
+  background.push(RECT(0, 0, W, H, C.bg, C.border, 10));
+  background.push(T(pad, 26, layout.titleText, { weight: 600, size: 14 }));
+  background.push(T(pad, 44, layout.productText, { fill: C.muted, size: 11 }));
+
+  background.push(`<defs>
+    <marker id="geo-green" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="${C.accent}"/></marker>
+    <marker id="geo-amber" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="${C.warn}"/></marker>
+  </defs>`);
+
+  // Geography columns: west is always left, unknown/central is middle, east is right.
+  layout.lanes.forEach((lane) => {
+    background.push(RECT(lane.x, lane.y, lane.w, lane.h, C.lane, C.border, 8));
+    background.push(T(lane.x + lane.w / 2, lane.y + 20, lane.label, { fill: C.muted, size: 10, weight: 600, anchor: "middle" }));
+  });
+
+  layout.rows.forEach((row) => {
+    background.push(T(pad + layout.roleW - 10, row.y + 22, row.label, {
+      fill: row.key === "edge" ? C.warn : row.key === "additional" ? C.info : C.accent,
+      size: 10,
+      weight: 600,
+      anchor: "end",
+    }));
+  });
+
+  layout.cells.forEach((cell) => {
+    const stroke = cell.rowKey === "edge" ? C.warn : cell.rowKey === "additional" ? C.info : C.border;
+    background.push(RECT(cell.x, cell.y, cell.w, cell.h, C.cell, stroke, 7, cell.rowKey === "edge"));
+  });
+
+  layout.nodes.forEach((node) => {
+    const fill = node.rowKey === "primary" ? C.primary : node.rowKey === "edge" ? C.edge : C.additional;
+    const stroke = node.rowKey === "primary" ? C.accent : node.rowKey === "edge" ? C.warn : C.info;
+    nodes.push(RECT(node.x, node.y, node.w, node.h, fill, stroke, 6)
+      + T(node.x + 11, node.y + 19, node.title, { weight: 600, size: 12 })
+      + T(node.x + 11, node.y + 36, node.sub, { fill: C.muted, size: 10 }));
+  });
+
+  const fed = layout.federation;
+  if (fed) {
+    const flow = `class="jfd-flow jfd-flow-fed" stroke="${C.accent}" stroke-width="1.4"`;
+    connectors.push(`<line x1="${fed.sourceX}" y1="${fed.sourceBottom}" x2="${fed.sourceX}" y2="${fed.busY}" ${flow}/>`);
+    connectors.push(`<line x1="${fed.minX}" y1="${fed.busY}" x2="${fed.maxX}" y2="${fed.busY}" ${flow}/>`);
+    fed.targets.forEach((target) => {
+      const x = target.x + target.w / 2;
+      connectors.push(`<line x1="${x}" y1="${fed.busY}" x2="${x}" y2="${target.y}" ${flow} marker-end="url(#geo-green)"/>`);
+    });
+    connectors.push(T(fed.labelX, fed.busY - 5, fed.label, { fill: C.accent, size: 9, anchor: "middle" }));
+  }
+
+  const dist = layout.distribution;
+  if (dist) {
+    const flow = `class="jfd-flow jfd-flow-dist" stroke="${C.warn}" stroke-width="1.6"`;
+    connectors.push(`<path d="M ${dist.sourceX} ${dist.sourceBottom} L ${dist.routeX} ${dist.sourceBottom} L ${dist.routeX} ${dist.busY}" fill="none" ${flow}/>`);
+    connectors.push(`<line x1="${dist.minX}" y1="${dist.busY}" x2="${dist.maxX}" y2="${dist.busY}" ${flow}/>`);
+    dist.targets.forEach((target) => {
+      const x = target.x + target.w / 2;
+      connectors.push(`<line x1="${x}" y1="${dist.busY}" x2="${x}" y2="${target.y}" ${flow} marker-end="url(#geo-amber)"/>`);
+    });
+    connectors.push(T(dist.labelX, dist.busY - 5, dist.label, { fill: C.warn, size: 9, weight: 600, anchor: "middle" }));
+  }
+
+  if (layout.footerStacked) {
+    background.push(T(W - pad, H - 30, layout.footerRight, { fill: C.muted, size: 10, anchor: "end" }));
+    background.push(T(pad, H - 14, layout.footerLeft, { fill: C.muted, size: 11 }));
+  } else {
+    background.push(T(pad, H - 14, layout.footerLeft, { fill: C.muted, size: 11 }));
+    background.push(T(W - pad, H - 14, layout.footerRight, { fill: C.muted, size: 10, anchor: "end" }));
+  }
+
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px;height:auto" xmlns="http://www.w3.org/2000/svg">${ARCH_FLOW_STYLE}${background.join("")}${connectors.join("")}${nodes.join("")}</svg>`;
+}
+
+/* ---------- draw.io / Lucid export ---------- */
+
+// Light palette: draw.io and Lucid both default to a white canvas.
+const DRAWIO_COLORS = {
+  txt: "#1b1e24",
+  muted: "#5b6270",
+  border: "#d8dbe2",
+  lane: "#f6f7f9",
+  accent: "#1f8f4d",
+  info: "#1f6fb2",
+  warn: "#a86400",
+  primaryFill: "#e9f5ee",
+  additionalFill: "#e8f1fa",
+  edgeFill: "#fbf1e0",
+};
+
+const DRAWIO_NODE_STYLE = {
+  primary: `rounded=1;arcSize=10;whiteSpace=wrap;html=1;align=left;spacingLeft=12;verticalAlign=middle;fillColor=${DRAWIO_COLORS.primaryFill};strokeColor=${DRAWIO_COLORS.accent};fontColor=${DRAWIO_COLORS.txt};fontSize=12;`,
+  additional: `rounded=1;arcSize=10;whiteSpace=wrap;html=1;align=left;spacingLeft=12;verticalAlign=middle;fillColor=${DRAWIO_COLORS.additionalFill};strokeColor=${DRAWIO_COLORS.info};fontColor=${DRAWIO_COLORS.txt};fontSize=12;`,
+  edge: `rounded=1;arcSize=10;whiteSpace=wrap;html=1;align=left;spacingLeft=12;verticalAlign=middle;dashed=1;dashPattern=6 4;fillColor=${DRAWIO_COLORS.edgeFill};strokeColor=${DRAWIO_COLORS.warn};fontColor=${DRAWIO_COLORS.txt};fontSize=12;`,
+};
+
+/**
+ * mxGraph XML for draw.io. Flow is drawn as real connected edges (not the SVG's
+ * drawn buses) with flowAnimation=1, so shapes stay linked when the file is
+ * opened in draw.io or imported into Lucidchart. Lucid keeps the shapes, links,
+ * and styling but drops the animation — it has no flowAnimation equivalent.
+ */
+function buildArchitectureDrawio(model) {
+  const C = DRAWIO_COLORS;
+  const layout = architectureLayout(model);
+  const round = (n) => Math.round(n * 10) / 10;
+  const cells = [];
+  let seq = 0;
+  const nextId = () => `s${++seq}`;
+
+  const vertex = (id, value, style, x, y, w, h) =>
+    `<mxCell id="${id}" value="${esc(value)}" style="${esc(style)}" vertex="1" parent="1">`
+    + `<mxGeometry x="${round(x)}" y="${round(y)}" width="${round(w)}" height="${round(h)}" as="geometry" /></mxCell>`;
+  const label = (value, style, x, y, w, h) => vertex(nextId(), value, `text;html=1;whiteSpace=wrap;${style}`, x, y, w, h);
+  const connect = (value, style, sourceId, targetId) =>
+    `<mxCell id="${nextId()}" value="${esc(value)}" style="${esc(style)}" edge="1" parent="1" source="${sourceId}" target="${targetId}">`
+    + `<mxGeometry relative="1" as="geometry" /></mxCell>`;
+
+  if (layout.empty) {
+    cells.push(label("No region-specific deployments to draw", `align=center;verticalAlign=middle;fontSize=14;fontStyle=1;fontColor=${C.txt};`, 40, 40, 560, 30));
+    cells.push(label("Assign a region to Primary, Additional, or Edge rows to include them.", `align=center;verticalAlign=middle;fontSize=11;fontColor=${C.muted};`, 40, 74, 560, 24));
+    return wrapDrawioFile(cells);
+  }
+
+  cells.push(label(layout.titleText, `align=left;verticalAlign=middle;fontSize=16;fontStyle=1;fontColor=${C.txt};`, layout.pad, 8, layout.W - layout.pad * 2, 26));
+  cells.push(label(layout.productText, `align=left;verticalAlign=middle;fontSize=11;fontColor=${C.muted};`, layout.pad, 34, layout.W - layout.pad * 2, 20));
+
+  layout.lanes.forEach((lane) => {
+    cells.push(vertex(
+      nextId(),
+      lane.label,
+      `rounded=1;arcSize=6;whiteSpace=wrap;html=1;verticalAlign=top;align=center;spacingTop=6;fillColor=${C.lane};strokeColor=${C.border};fontColor=${C.muted};fontSize=10;fontStyle=1;`,
+      lane.x, lane.y, lane.w, lane.h,
+    ));
+  });
+
+  layout.rows.forEach((row) => {
+    const color = row.key === "edge" ? C.warn : row.key === "additional" ? C.info : C.accent;
+    cells.push(label(row.label, `align=right;verticalAlign=middle;fontSize=10;fontStyle=1;fontColor=${color};`, layout.pad, row.y + 8, layout.roleW - 12, 20));
+  });
+
+  layout.cells.forEach((cell) => {
+    const stroke = cell.rowKey === "edge" ? C.warn : cell.rowKey === "additional" ? C.info : C.border;
+    cells.push(vertex(
+      nextId(),
+      "",
+      `rounded=1;arcSize=6;whiteSpace=wrap;html=1;fillColor=none;strokeColor=${stroke};${cell.rowKey === "edge" ? "dashed=1;dashPattern=5 4;" : ""}`,
+      cell.x, cell.y, cell.w, cell.h,
+    ));
+  });
+
+  layout.nodes.forEach((node) => {
+    const value = `<b>${esc(node.title)}</b><br><font color="${C.muted}">${esc(node.sub)}</font>`;
+    cells.push(vertex(node.id, value, DRAWIO_NODE_STYLE[node.rowKey], node.x, node.y, node.w, node.h));
+  });
+
+  const fed = layout.federation;
+  if (fed) {
+    const style = `edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;flowAnimation=1;strokeColor=${C.accent};strokeWidth=2;endArrow=blockThin;endFill=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=10;fontColor=${C.accent};labelBackgroundColor=#ffffff;`;
+    fed.targets.forEach((target, index) => {
+      cells.push(connect(index === 0 ? fed.label : "", style, fed.source.id, target.id));
+    });
+  }
+
+  const dist = layout.distribution;
+  if (dist) {
+    const style = `edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;dashed=1;dashPattern=8 6;flowAnimation=1;strokeColor=${C.warn};strokeWidth=2;endArrow=blockThin;endFill=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=10;fontColor=${C.warn};labelBackgroundColor=#ffffff;`;
+    dist.targets.forEach((target, index) => {
+      cells.push(connect(index === 0 ? dist.label : "", style, dist.source.id, target.id));
+    });
+  }
+
+  const footerY = layout.H - (layout.footerStacked ? 44 : 28);
+  cells.push(label(layout.footerLeft, `align=left;verticalAlign=middle;fontSize=11;fontColor=${C.muted};`, layout.pad, footerY, layout.W - layout.pad * 2, 20));
+  cells.push(label(layout.footerRight, `align=left;verticalAlign=middle;fontSize=10;fontColor=${C.muted};`, layout.pad, footerY + 20, layout.W - layout.pad * 2, 18));
+
+  const legend = [
+    ["Primary JPD / JPS", C.accent, C.primaryFill],
+    ["Additional Platform Instance", C.info, C.additionalFill],
+    ["Edge (self-managed / Cloud)", C.warn, C.edgeFill],
+  ];
+  legend.forEach(([text, stroke, fill], index) => {
+    const x = layout.pad + index * 230;
+    const y = layout.H + 12;
+    cells.push(vertex(nextId(), "", `rounded=0;html=1;fillColor=${fill};strokeColor=${stroke};`, x, y, 14, 14));
+    cells.push(label(text, `align=left;verticalAlign=middle;fontSize=10;fontColor=${C.muted};`, x + 20, y - 3, 200, 20));
+  });
+
+  return wrapDrawioFile(cells);
+}
+
+function wrapDrawioFile(cells) {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="jfrog-license-entitlements" modified="${new Date().toISOString()}" agent="JFrog License Entitlements Analyzer" type="device">
+  <diagram id="jfrog-architecture" name="JFrog architecture">
+    <mxGraphModel dx="1400" dy="900" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="826" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        ${cells.join("\n        ")}
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
+`;
+}
+
+function downloadTextFile(filename, contents, mime) {
+  const blob = new Blob([contents], { type: mime });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = filename;
@@ -1626,7 +1851,9 @@ function render(result) {
   const capsIncluded = result.capabilityRows.filter((r) => r.status === "included" || r.status === "partial");
   const capsMissing = result.capabilityRows.filter((r) => r.status === "excluded" || r.status === "addon");
   const diagramSvg = buildArchitectureSvg(result.diagramSites);
+  const diagramDrawio = buildArchitectureDrawio(result.diagramSites);
   window.__lastDiagramSvg = diagramSvg;
+  window.__lastDiagramDrawio = diagramDrawio;
   const regionSummary = result.input.regions.length
     ? result.input.regions.map((r) => {
       const provider = IAAS_LABELS[r.iaas] || r.iaas || "";
@@ -1703,10 +1930,14 @@ function render(result) {
         <span class="lg-additional">Additional Platform Instance</span>
         <span class="lg-edge">Edge (self-managed / Cloud)</span>
         <span class="lg-link">West · Central · East placement</span>
+        <span class="lg-flow">Animated flow: federation (green) · Release Bundle push (amber)</span>
       </div>
       <div class="btn-row">
         <button type="button" id="btnDownloadDiagram">Download diagram (.svg)</button>
+        <button type="button" id="btnDownloadDrawio">Download for draw.io / Lucid (.drawio)</button>
+        <button type="button" id="btnToggleDiagramAnimation" aria-pressed="false">Pause animation</button>
       </div>
+      <p class="muted" style="margin:8px 0 0;font-size:11px">The .svg keeps its animation in any browser. The .drawio file animates in draw.io (<span class="mono">flowAnimation</span>) and imports into Lucidchart via <strong>File → Import</strong> — Lucid keeps the shapes, connectors, and colors but drops the animation.</p>
     </div>
 
     <div class="result-block">
@@ -1751,9 +1982,22 @@ function render(result) {
     </div>
   `;
 
+  const diagramFileBase = () => `jfrog-architecture-${(input.customerName || "customer").replace(/\s+/g, "-").toLowerCase()}`;
+
   $("btnDownloadDiagram")?.addEventListener("click", () => {
-    const name = (input.customerName || "customer").replace(/\s+/g, "-").toLowerCase();
-    downloadSvg(`jfrog-architecture-${name}.svg`, window.__lastDiagramSvg || diagramSvg);
+    downloadTextFile(`${diagramFileBase()}.svg`, window.__lastDiagramSvg || diagramSvg, "image/svg+xml");
+  });
+
+  $("btnDownloadDrawio")?.addEventListener("click", () => {
+    downloadTextFile(`${diagramFileBase()}.drawio`, window.__lastDiagramDrawio || diagramDrawio, "application/xml;charset=utf-8");
+  });
+
+  $("btnToggleDiagramAnimation")?.addEventListener("click", (event) => {
+    const svg = out.querySelector(".diagram-wrap svg");
+    if (!svg) return;
+    const paused = svg.classList.toggle("jfd-paused");
+    event.currentTarget.textContent = paused ? "Play animation" : "Pause animation";
+    event.currentTarget.setAttribute("aria-pressed", String(paused));
   });
 }
 
@@ -2097,6 +2341,7 @@ th{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.04
 .diagram-legend .lg-additional::before{background:rgba(31,111,178,.2);border-color:var(--info);}
 .diagram-legend .lg-edge::before{background:rgba(168,100,0,.15);border-color:var(--warn);}
 .diagram-legend .lg-link::before{background:transparent;border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);}
+.diagram-legend .lg-flow::before{background:linear-gradient(90deg,var(--accent) 0 40%,transparent 40% 60%,var(--warn) 60% 100%);border-color:transparent;border-radius:0;height:3px;width:18px;vertical-align:3px;}
 .latest-reference details{margin-top:10px;background:var(--panel-2);border:1px solid var(--border);border-radius:7px;overflow:hidden;}
 .latest-reference summary{cursor:pointer;padding:10px 12px;font-size:12px;font-weight:600;}
 .btn-row,button{display:none !important;}

@@ -331,6 +331,14 @@ textarea:focus {
 .diagram-legend .lg-additional::before { background: rgba(74, 163, 255, 0.25); border-color: var(--info); }
 .diagram-legend .lg-edge::before { background: rgba(245, 166, 35, 0.2); border-color: var(--warn); }
 .diagram-legend .lg-link::before { background: transparent; border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.diagram-legend .lg-flow::before {
+  background: linear-gradient(90deg, var(--accent) 0 40%, transparent 40% 60%, var(--warn) 60% 100%);
+  border-color: transparent;
+  border-radius: 0;
+  height: 3px;
+  width: 18px;
+  vertical-align: 3px;
+}
 
 .btn-row {
   display: flex;

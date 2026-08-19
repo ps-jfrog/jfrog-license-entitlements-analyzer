@@ -80,12 +80,27 @@ Not in that SF browser view but still parsed when present on an order: Edge, Add
 
 - **Licensed baseline** + blockers / watches (wrong tier for an add-on, AppTrust without Ent+, region vs order mismatches, etc.)
 - **Capacity cards:** sites/servers, projects, security seats, SaaS consumption, IaaS/topology
-- **Architecture diagram (SVG)** — regions with Primary JPDs, Additional Platform Instances, Edges, federation / distribution links; downloadable
+- **Architecture diagram** — regions with Primary JPDs, Additional Platform Instances, Edges, and **animated** federation / distribution links (see below)
 - **What they can use** vs **not licensed / needs purchase**
 - **PS kickoff checklist** tailored to the config
 - **Export JSON** / **Import JSON** for notes / handoff (import restores the form and re-runs Analyze)
 
 **Load example** pre-fills a hybrid multi-cloud sketch: SaaS primary + additional on **GCP**, On-Prem JPS + Edges on **Azure**.
+
+### Architecture diagram: animation and portability
+
+Flow direction is animated so the diagram reads correctly in a live walkthrough: green dashes travel Primary → Additional Platform Instances (repository / access federation) and amber dashes travel Primary → Edges (Release Bundle distribution push). **Pause animation** freezes it for screenshots, and the animation is skipped automatically for anyone with the OS "reduce motion" preference set.
+
+Two downloads sit under the diagram:
+
+| Download | Best for | Animation |
+|----------|----------|-----------|
+| `.svg` | Slides, docs, the HTML/PDF report | Yes — the CSS keyframes live inside the file, so it animates in any browser |
+| `.drawio` | Editing in [draw.io](https://app.diagrams.net) or importing into Lucidchart | Yes in draw.io (`flowAnimation=1`), no in Lucid |
+
+The `.drawio` file is uncompressed mxGraph XML built from the same layout pass as the SVG. It is **native shapes, not an embedded image**: lanes, role labels, node boxes, and real source→target connectors, so everything stays editable and connected downstream.
+
+**Importing into Lucidchart:** in the Lucidchart editor, **File → Import Diagram** and pick the `.drawio` file (Lucid accepts `.drawio` and `.xml` from draw.io — if its file picker rejects the extension, rename it to `.xml`). Lucid keeps the shapes, connectors, text, and colors, but drops the flow animation — it has no `flowAnimation` equivalent. Keep the `.svg` for anything that needs the motion.
 
 ---
 
@@ -106,7 +121,7 @@ npm run refresh
 npm run check
 ```
 
-`npm run check` syntax-checks the scripts, runs the Salesforce parser tests, and runs a headless DOM test (`scripts/test-ui.mjs`, via the `jsdom` devDependency) that exercises the region rows, multi-provider topology, and diagram output. The app itself still ships as plain HTML/CSS/JS with no runtime dependencies.
+`npm run check` syntax-checks the scripts, runs the Salesforce parser tests, and runs a headless DOM test (`scripts/test-ui.mjs`, via the `jsdom` devDependency) that exercises the region rows, multi-provider topology, SVG diagram output (including the animation stylesheet), and the draw.io export. The app itself still ships as plain HTML/CSS/JS with no runtime dependencies.
 
 The page shows the dataset date, source links, all scraped feature rows for the selected self-managed tier, and source conflicts. Conflicts carry the tiers they apply to, so an Enterprise X discrepancy is not raised on an Enterprise+ analysis. Ambiguous claims are marked **Review required** and are not used to auto-enable products. The signed order/SFDC contract remains authoritative.
 
