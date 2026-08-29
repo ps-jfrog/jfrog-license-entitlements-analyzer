@@ -87,7 +87,9 @@ assert(!/CENTRAL \/ OTHER/.test(svg), "Central must no longer absorb OTHER");
 // Client/network-access + JFrog-side routing overview band (hybrid: On-Prem region present).
 assert(/On-Prem ↔ Cloud/.test(svg), "On-Prem ↔ Cloud connectivity box missing when an On-Prem region is present");
 assert(/Direct Connect \+ VPN Gateway|ExpressRoute \+ VPN Gateway|Cloud Interconnect \+ Cloud VPN/.test(svg), "cloud-specific VPN/interconnect label missing");
-assert(/Corporate DNS/.test(svg) && /Resolves \*\.pe\.jfrog\.io/.test(svg), "corporate DNS box missing *.pe.jfrog.io routing note");
+assert(/Corporate DNS/.test(svg) && /Conditional forwarder/.test(svg), "corporate DNS box missing its conditional-forwarder note when On-Prem is present");
+assert(/DNS Resolver Endpoint/.test(svg), "cloud-side DNS resolver endpoint (inbound) box missing when On-Prem is present");
+assert(/R53 Resolver \(inbound\)|DNS Private Resolver|Cloud DNS \(inbound\)|Corp DNS resolver/.test(svg), "cloud-specific inbound resolver label missing");
 assert(/Load Balancer/.test(svg), "load balancer box missing from access band");
 assert(/Private Endpoint/.test(svg), "private endpoint box missing from access band");
 assert(/JFrog-side DNS routing/.test(svg), "JFrog-side DNS routing box missing");
@@ -144,6 +146,8 @@ const flowSvg = window.__lastDiagramSvg || "";
 const styleBlock = (flowSvg.match(/<style>([\s\S]*?)<\/style>/) || [])[1];
 assert(styleBlock, "diagram is missing its inline animation stylesheet");
 assert(/@keyframes jfd-flow-fed/.test(styleBlock) && /@keyframes jfd-flow-dist/.test(styleBlock), "flow keyframes missing");
+assert(/@keyframes jfd-flow-net/.test(styleBlock) && /@keyframes jfd-flow-route/.test(styleBlock) && /@keyframes jfd-flow-bypass/.test(styleBlock),
+  "flow keyframes for the access/routing/bypass connectors are missing — every arrow should animate, not just federation/distribution");
 assert(/prefers-reduced-motion/.test(styleBlock), "animation must honour prefers-reduced-motion");
 assert(/svg\.jfd-paused \.jfd-flow\s*\{\s*animation:\s*none/.test(styleBlock), "paused state must stop the animation");
 styleBlock.split("\n")
@@ -154,6 +158,9 @@ styleBlock.split("\n")
   });
 assert(/class="jfd-flow jfd-flow-fed"/.test(flowSvg), "federation connectors are not animated");
 assert(/class="jfd-flow jfd-flow-dist"/.test(flowSvg), "distribution connectors are not animated");
+assert(/class="jfd-flow jfd-flow-net"/.test(flowSvg), "client/network-access chain connectors are not animated");
+assert(/class="jfd-flow jfd-flow-route"/.test(flowSvg), "JFrog-side routing fan-out connectors are not animated");
+assert(/class="jfd-flow jfd-flow-bypass"/.test(flowSvg), "optional client-bypass connector is not animated");
 
 const mountedDiagram = window.document.querySelector("#results .diagram-wrap svg");
 assert(mountedDiagram, "diagram is not mounted in the results panel");
@@ -231,9 +238,13 @@ window.addRegionRow({ iaas: "aws", siteKind: "saas", region: "us-east-1", primar
 $("btnAnalyze").click();
 footerNoOverlap(window.__lastDiagramSvg, "narrow-saas");
 
-// Pure-cloud SaaS with no On-Prem region — the VPN/connectivity box must not appear.
-assert(!/On-Prem ↔ Cloud/.test(window.__lastDiagramSvg || ""), "On-Prem ↔ Cloud box should not appear without an On-Prem region (SVG)");
-assert(!/On-Prem ↔ Cloud/.test(window.__lastDiagramDrawio || ""), "On-Prem ↔ Cloud box should not appear without an On-Prem region (draw.io)");
+// Pure-cloud SaaS with no On-Prem region — on-prem CI/CD clients connecting to this
+// instance are a scenario every customer has regardless of their purchased topology, so
+// the VPN/conditional-forwarder/resolver-endpoint path is always drawn, never gated behind
+// whether the order happens to include an actual On-Prem JPS region.
+assert(/On-Prem ↔ Cloud/.test(window.__lastDiagramSvg || ""), "On-Prem ↔ Cloud connectivity box should always be shown, regardless of the purchased topology (SVG)");
+assert(/On-Prem ↔ Cloud/.test(window.__lastDiagramDrawio || ""), "On-Prem ↔ Cloud connectivity box should always be shown, regardless of the purchased topology (draw.io)");
+assert(/public: via JFrog DNS routing/.test(window.__lastDiagramSvg || ""), "public/no-private-connectivity bypass label missing for a pure-SaaS scenario");
 
 // True Central geography still uses CENTRAL (not OTHER).
 $("regionList").innerHTML = "";
