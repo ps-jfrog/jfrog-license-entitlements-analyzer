@@ -80,9 +80,9 @@ Not in that SF browser view but still parsed when present on an order: Edge, Add
 
 - **Licensed baseline** + blockers / watches (wrong tier for an add-on, AppTrust without Ent+, region vs order mismatches, etc.)
 - **Capacity cards:** sites/servers, projects, security seats, SaaS consumption, IaaS/topology
-- **Architecture diagram** — regions with Primary JPDs, Additional Platform Instances, Edges, and **animated** federation / distribution links (see below)
+- **Architecture diagram** — regions with Primary JPDs, Additional Platform Instances, Edges, and **animated** federation / distribution links (see below), plus an overview band showing client/network access (On-Prem ↔ Cloud VPN/Direct Connect when an On-Prem region is present, corporate DNS, load balancer, and cloud private endpoint routing internal CI/CD, security tooling, and users to `*.pe.jfrog.io`) — each rendered with the **real AWS/Azure/GCP service icon** for that resource (AWS4/GCP2 native draw.io stencils, Azure's bundled `azure2` icon set), not a generic box — and JFrog-side DNS routing with explicit lines to every Primary **and** Additional site (manual failover / geo-location, per [DNS Routing in MyJFrog](https://docs.jfrog.com/administration/docs/dns-routing-in-myjfrog) — Private Endpoints do **not** auto-failover with it, called out directly on the diagram), a SaaS/self-managed auth callout, and a monitoring callout tailored to the deployment model and cloud provider(s)
 - **What they can use** vs **not licensed / needs purchase**
-- **PS kickoff checklist** tailored to the config
+- **PS kickoff checklist** tailored to the config, including concrete setup steps for PrivateLink/Private Link/PSC, corporate DNS + load balancer wiring, On-Prem↔Cloud connectivity, and JFrog-side DNS routing — sourced from JFrog's own MyJFrog documentation
 - **Export JSON** / **Import JSON** for notes / handoff (import restores the form and re-runs Analyze)
 
 **Load example** pre-fills a hybrid multi-cloud sketch: SaaS primary + additional on **GCP**, On-Prem JPS + Edges on **Azure**.
@@ -91,16 +91,23 @@ Not in that SF browser view but still parsed when present on an order: Edge, Add
 
 Flow direction is animated so the diagram reads correctly in a live walkthrough: green dashes travel Primary → Additional Platform Instances (repository / access federation) and amber dashes travel Primary → Edges (Release Bundle distribution push). **Pause animation** freezes it for screenshots, and the animation is skipped automatically for anyone with the OS "reduce motion" preference set.
 
-Two downloads sit under the diagram:
+Three downloads sit under the diagram:
 
 | Download | Best for | Animation |
 |----------|----------|-----------|
 | `.svg` | Slides, docs, the HTML/PDF report | Yes — the CSS keyframes live inside the file, so it animates in any browser |
-| `.drawio` | Editing in [draw.io](https://app.diagrams.net) or importing into Lucidchart | Yes in draw.io (`flowAnimation=1`), no in Lucid |
+| `.xml` | Editing in [draw.io](https://app.diagrams.net) directly; **Lucidchart via a round-trip through draw.io** (see below) | Yes in draw.io (`flowAnimation=1`), no in Lucid |
+| `.png` | **Lucid Spark**, or anywhere only a flat image is needed | No — static raster, rasterized client-side from the `.svg` via `<canvas>` |
 
-The `.drawio` file is uncompressed mxGraph XML built from the same layout pass as the SVG. It is **native shapes, not an embedded image**: lanes, role labels, node boxes, and real source→target connectors, so everything stays editable and connected downstream.
+The `.xml` file is an uncompressed draw.io document built from the same layout pass as the SVG: lanes, role labels, node boxes, and real source→target connectors (never a bare source/target-less "point" edge). It opens directly and reliably in draw.io as native, editable shapes.
 
-**Importing into Lucidchart:** in the Lucidchart editor, **File → Import Diagram** and pick the `.drawio` file (Lucid accepts `.drawio` and `.xml` from draw.io — if its file picker rejects the extension, rename it to `.xml`). Lucid keeps the shapes, connectors, text, and colors, but drops the flow animation — it has no `flowAnimation` equivalent. Keep the `.svg` for anything that needs the motion.
+**Lucidchart will reject this (or any hand-built) `.xml`/`.drawio` file if uploaded to it directly**, even one that is byte-for-byte structurally identical to a real export — per [Lucid's own docs](https://help.lucid.co/hc/en-us/articles/16389149809428-Import-files-into-Lucidchart), "you cannot import .xml files that were exported from other tools." This is a provenance check, not a format check, so there is no header or structure that makes a non-draw.io-generated file pass it. The reliable path into Lucidchart is a round-trip through the real app:
+
+1. Open the downloaded `.xml` in [app.diagrams.net](https://app.diagrams.net) (File → Open).
+2. Save/export it from draw.io itself (so the file has genuinely been produced by draw.io).
+3. Import *that* file into Lucidchart via **File → Import Diagram**.
+
+**Lucid Spark cannot import draw.io/`.xml`/`.drawio` files at all** — Spark's import list is CSV (as cards), PNG, PDF, and content from Miro/MURAL/FigJam; `File → Import Diagram` is Lucidchart-only even though both products share one Lucid account. Use the **.png** download and insert it as a flat image on the board — shapes and connectors won't be individually editable there, but the diagram will render correctly.
 
 ---
 

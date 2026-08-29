@@ -84,6 +84,17 @@ assert(/On-Prem/.test(svg), "On-Prem provider label missing from diagram");
 assert(/OTHER \/ UNDEFINED/.test(svg), "On-Prem DC must land in OTHER");
 assert(!/CENTRAL \/ OTHER/.test(svg), "Central must no longer absorb OTHER");
 
+// Client/network-access + JFrog-side routing overview band (hybrid: On-Prem region present).
+assert(/On-Prem ↔ Cloud/.test(svg), "On-Prem ↔ Cloud connectivity box missing when an On-Prem region is present");
+assert(/Direct Connect \+ VPN Gateway|ExpressRoute \+ VPN Gateway|Cloud Interconnect \+ Cloud VPN/.test(svg), "cloud-specific VPN/interconnect label missing");
+assert(/Corporate DNS/.test(svg) && /Resolves \*\.pe\.jfrog\.io/.test(svg), "corporate DNS box missing *.pe.jfrog.io routing note");
+assert(/Load Balancer/.test(svg), "load balancer box missing from access band");
+assert(/Private Endpoint/.test(svg), "private endpoint box missing from access band");
+assert(/JFrog-side DNS routing/.test(svg), "JFrog-side DNS routing box missing");
+assert(/Manual failover \/ geo-location/.test(svg), "manual failover / geo-location routing note missing");
+assert(/SSO \(SAML \/ OIDC\)/.test(svg), "SaaS/self-managed auth callout missing");
+assert(/Monitoring —/.test(svg), "monitoring callout missing");
+
 // Header must not overlap: title and product list live on separate lines.
 const texts = [...svg.matchAll(/<text[^>]*y="(\d+(?:\.\d+)?)"[^>]*>([^<]*)<\/text>/g)]
   .map((m) => ({ y: Number(m[1]), value: m[2] }));
@@ -152,11 +163,15 @@ assert($("btnToggleDiagramAnimation").textContent === "Play animation", "pause b
 $("btnToggleDiagramAnimation").click();
 assert(!mountedDiagram.classList.contains("jfd-paused"), "second click must resume the animation");
 assert($("btnDownloadDrawio"), "draw.io download button missing from the diagram block");
+assert($("btnDownloadPng"), "Lucid Spark PNG download button missing from the diagram block (Spark has no draw.io/xml import path)");
 
 // draw.io export: native shapes plus real connected edges with flow animation,
 // which is what makes the file importable into Lucidchart.
 const drawio = window.__lastDiagramDrawio || "";
-assert(/^<\?xml version="1\.0" encoding="UTF-8"\?>\n<mxfile /.test(drawio), "draw.io export is not an mxfile document");
+// No leading <?xml ...?> declaration and no non-standard header attributes — real
+// app.diagrams.net exports never have either, and Lucid's importer sniffs this exact
+// prefix to confirm the file is a genuine draw.io document before parsing it.
+assert(/^<mxfile host="app\.diagrams\.net" agent="[^"]*" version="[^"]*">\n/.test(drawio), "draw.io export must start with a bare <mxfile host=\"app.diagrams.net\" ...> tag, no XML prologue");
 assert(/<mxGraphModel /.test(drawio) && /<root>/.test(drawio), "draw.io export is missing the graph model");
 assert(/Primary JPD 1/.test(drawio) && /Additional Instance 1/.test(drawio) && /Edge 2/.test(drawio),
   "draw.io export is missing topology nodes");
@@ -165,12 +180,38 @@ const drawioNodeIds = [...drawio.matchAll(/<mxCell id="(n\d+)"/g)].map((m) => m[
 assert(drawioNodeIds.length === 4, `expected 4 draw.io node shapes, got ${drawioNodeIds.length}`);
 assert(new Set(drawioNodeIds).size === drawioNodeIds.length, "draw.io node ids must be unique");
 const drawioEdges = [...drawio.matchAll(/style="([^"]*)" edge="1" parent="1" source="([^"]+)" target="([^"]+)"/g)];
-assert(drawioEdges.length === 3, `expected 3 draw.io connectors (1 federation + 2 distribution), got ${drawioEdges.length}`);
-drawioEdges.forEach(([, style, source, target]) => {
-  assert(/flowAnimation=1/.test(style), "draw.io edges must carry flowAnimation=1");
+const animatedEdges = drawioEdges.filter(([, style]) => /flowAnimation=1/.test(style));
+assert(animatedEdges.length === 3, `expected 3 flow-animated draw.io connectors (1 federation + 2 distribution), got ${animatedEdges.length}`);
+animatedEdges.forEach(([, , source, target]) => {
   assert(drawioNodeIds.includes(source) && drawioNodeIds.includes(target),
     `draw.io edge points at a missing shape (${source} -> ${target})`);
 });
+
+// Client/network-access + JFrog-side routing overview band exports as native shapes too.
+// Every edge (animated or not) must be a real source->target connector pointing at a real
+// shape — Lucid's draw.io importer rejects the *entire file* on a source/target-less "point"
+// edge (an <mxCell edge="1"> with only sourcePoint/targetPoint geometry), so none may exist.
+assert(/Private Endpoint/.test(drawio) && /Load Balancer/.test(drawio) && /Corporate DNS/.test(drawio),
+  "draw.io export is missing the client/network-access band");
+assert(/JFrog-side DNS routing/.test(drawio), "draw.io export is missing the JFrog-side DNS routing box");
+assert(!/sourcePoint|targetPoint/.test(drawio), "draw.io export must not contain source/target-less point edges (Lucid rejects the whole file)");
+assert(drawioEdges.length > animatedEdges.length, "expected additional non-animated connectors for the client/network-access + routing band");
+const allShapeIds = [...drawio.matchAll(/<mxCell id="([^"]+)"[^>]* vertex="1"/g)].map((m) => m[1]);
+drawioEdges.forEach(([, , source, target]) => {
+  assert(allShapeIds.includes(source) && allShapeIds.includes(target),
+    `draw.io edge points at a missing shape (${source} -> ${target})`);
+});
+// This scenario's Edge POP is an On-Prem row, so the VPN/connectivity box is expected here.
+assert(/On-Prem ↔ Cloud/.test(drawio), "On-Prem ↔ Cloud box missing even though an On-Prem region is present");
+
+// Cloud-provider icons (this scenario mixes AWS + GCP + On-Prem regions) must be fully
+// self-contained embedded images, never a reference to draw.io's internal shape-library
+// names — those were guessed by naming convention for GCP, never confirmed against
+// draw.io's actual registry, and silently rendered blank ("images missing") for users.
+assert(/image=data:image\/svg\+xml;base64,[A-Za-z0-9+/=]+;/.test(drawio),
+  "draw.io export is missing embedded (data: URI) cloud-provider icons");
+assert(!/shape=mxgraph\.(aws4|gcp2)\./.test(drawio),
+  "draw.io export must not reference internal aws4/gcp2 stencil names — embed the icon as a self-contained image instead");
 
 // Narrow single-region SaaS with edges + consumption — the case the user reported spilling.
 $("regionList").innerHTML = "";
@@ -189,6 +230,10 @@ $("saasUnitSizeGB").value = "1000";
 window.addRegionRow({ iaas: "aws", siteKind: "saas", region: "us-east-1", primary: 1, edge: 2 });
 $("btnAnalyze").click();
 footerNoOverlap(window.__lastDiagramSvg, "narrow-saas");
+
+// Pure-cloud SaaS with no On-Prem region — the VPN/connectivity box must not appear.
+assert(!/On-Prem ↔ Cloud/.test(window.__lastDiagramSvg || ""), "On-Prem ↔ Cloud box should not appear without an On-Prem region (SVG)");
+assert(!/On-Prem ↔ Cloud/.test(window.__lastDiagramDrawio || ""), "On-Prem ↔ Cloud box should not appear without an On-Prem region (draw.io)");
 
 // True Central geography still uses CENTRAL (not OTHER).
 $("regionList").innerHTML = "";

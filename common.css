@@ -330,6 +330,8 @@ textarea:focus {
 .diagram-legend .lg-primary::before { background: rgba(64, 191, 106, 0.35); border-color: var(--accent); }
 .diagram-legend .lg-additional::before { background: rgba(74, 163, 255, 0.25); border-color: var(--info); }
 .diagram-legend .lg-edge::before { background: rgba(245, 166, 35, 0.2); border-color: var(--warn); }
+.diagram-legend .lg-net::before { background: rgba(180, 123, 255, 0.25); border-color: #b47bff; }
+.diagram-legend .lg-route::before { background: rgba(47, 209, 197, 0.2); border-color: #2fd1c5; }
 .diagram-legend .lg-link::before { background: transparent; border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 .diagram-legend .lg-flow::before {
   background: linear-gradient(90deg, var(--accent) 0 40%, transparent 40% 60%, var(--warn) 60% 100%);
