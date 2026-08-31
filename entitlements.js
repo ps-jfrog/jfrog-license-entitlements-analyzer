@@ -1117,6 +1117,10 @@ function buildNextSteps(input, tier, ctx) {
       title: "Wire corporate DNS + load balancer to *.pe.jfrog.io",
       detail: `Point internal DNS (${connectivityMeta.dns}) and the load balancer (${connectivityMeta.lb}) at the private endpoint so CI/CD, security tooling, and users resolve <server>.pe.jfrog.io internally — do this before disabling public access, and confirm it resolves from every client network (VPN-connected included).`,
     });
+    steps.push({
+      title: "Optional: custom domain on the load balancer",
+      detail: `To front the private endpoint with a customer-owned domain (e.g. artifactory.acme.com) instead of exposing <server>.pe.jfrog.io to users, point that domain at the ${connectivityMeta.lb} rather than at the endpoint directly. TLS has to work one of two ways: the load balancer passes it through untouched by SNI (so <server>.pe.jfrog.io — what JFrog's certificate is actually issued for — is still what's being matched), or the load balancer terminates the custom domain's own certificate and re-encrypts on to the endpoint. Either way its backend pool target doesn't change: the private endpoint's private IP — the custom domain itself is never publicly resolvable.`,
+    });
   }
 
   if (hasOnPremRegion) {
@@ -1137,6 +1141,12 @@ function buildNextSteps(input, tier, ctx) {
       title: "Configure JFrog-side DNS routing (MyJFrog)",
       detail: "In MyJFrog, define a routing URL and choose Manual Failover (exactly 2 JPDs, active-passive — triggers an email after ~10 min down, then you switch manually) or Geolocation (2-10 JPDs, mapped by continent/country/US state) — point the customer's domain at the routing URL, never at individual JPDs. Private Endpoints do NOT participate in this failover: repoint them to the secondary region manually, and note that cross-provider failover breaks private connectivity entirely (different provider = no private path).",
     });
+    if (needsPrivateEndpoint) {
+      steps.push({
+        title: "Resolving the routing URL privately needs a load balancer, not a DNS override",
+        detail: "If CI/CD or internal tooling should resolve the routing URL itself (not <server>.pe.jfrog.io) and still land privately on whichever JPD is active, a plain internal DNS override that points it straight at a private endpoint's IP will fail TLS — that endpoint's certificate is issued for <server>.pe.jfrog.io, not the routing URL, so the hostname won't match. Front it with a load balancer instead: the LB terminates the routing URL with your own certificate, then re-encrypts to whichever JPD's <server>.pe.jfrog.io is currently active by SNI/Host header. That backend selection is on you to maintain — MyJFrog's failover doesn't drive it — so tie flipping the LB's backend to the same trigger as the MyJFrog manual failover (or your own health checks), otherwise the public and private paths can point at different JPDs at the same time.",
+      });
+    }
   }
 
   if (ctx.edgeCount > 0) {
@@ -1538,7 +1548,16 @@ function architectureLayout(model) {
   // where a literal "<" opens an (unknown, invisible) tag and silently eats the text.
   const accessChainLabels = ["", "*.pe.jfrog.io", "[server].pe.jfrog.io", "[server].pe.jfrog.io"];
   const publicRouteLabel = "public: [server].jfrog.io";
-  const privatePeLabel = "private: [server].pe.jfrog.io";
+  // Custom domain (vanity URL, e.g. artifactory.acme.com) for the private endpoint: the
+  // customer points it at their own load balancer instead of [server].pe.jfrog.io directly.
+  // From there TLS either passes through unmodified by SNI — the LB never terminates it,
+  // so the original [server].pe.jfrog.io name is what JFrog's certificate still has to
+  // match — or the LB terminates the custom domain's own certificate and re-encrypts to
+  // the endpoint. Either way the LB's backend pool target never changes: it's always the
+  // private endpoint's private IP, so the custom domain is never resolvable publicly. Folded
+  // into this same edge label (rather than a separate caption band) since the only free
+  // space nearby is already crossed by the public/cloud-native bypass lines above it.
+  const privatePeLabel = "private (or custom domain): [server].pe.jfrog.io";
   const cloudMeta = model.connectivityMeta || DIAGRAM_META[model.connectivityProvider] || DIAGRAM_META.aws;
   // iconKind looks up the real cloud-provider icon (CLOUD_ICON_DATA via cloudIconSvgMarkup /
   // cloudIconDrawioStyle) for model.connectivityProvider; null means a generic box only.
@@ -1567,7 +1586,10 @@ function architectureLayout(model) {
   // Rough advance-width estimate (shared with the W/footer sizing below) so long titles
   // and captions widen their box instead of overflowing it.
   const textW = (text, size) => text.length * size * 0.58;
-  const routeSub = `Manual failover / geo-location · ${primaries.length + additionals.length} writable site(s) · excludes Private Endpoints (left)`;
+  // This box's own width auto-grows to fit routeSub (see routeBoxMinW below), so it's the
+  // one safe place in this band to add a longer caption — everywhere else here is already
+  // crossed by the LB→route/LB→pf curves and the public/cloud-native bypass lines.
+  const routeSub = `Manual failover / geo-location · ${primaries.length + additionals.length} writable site(s) · excludes Private Endpoints (left) · to mirror privately, front with your own LB (SNI to whichever JPD is active — not auto-synced with this)`;
   const peBoxW = 210;
   const routeGapX = 16;
   const routeBoxMinW = Math.ceil(textW(routeSub, 10)) + 48;
@@ -1848,6 +1870,14 @@ function architectureLayout(model) {
   // through the routing hub beside it. Short direct drops into Primary; Additional reached
   // via its own short side channel just left of the grid.
   const peOutX = peBoxX + peBoxW / 2;
+  // Best practice for a single custom domain fronting the private path (see privatePeLabel
+  // above): point its load balancer at whichever JPD is Primary right now, with the
+  // Additional instance as standby — the same active/passive pairing Manual Failover uses
+  // publicly, just mirrored on the customer's own LB. Only label it that way when the
+  // topology actually is a clean 2-JPD failover pair; with Geolocation or 3+ writable sites
+  // there's no single "the standby one," so we leave the fan-out unlabeled instead of
+  // asserting something misleading.
+  const peSingleFailoverPair = anchors.primary.length === 1 && anchors.additional.length === 1;
   const peFan = {
     id: "pe1",
     x: peBoxX,
@@ -1869,6 +1899,8 @@ function architectureLayout(model) {
     additionalTargets: anchors.additional.map((a) => ({ x: centerX(a), y: a.y, id: a.id })),
     cloudNativeBypass,
     inLabel: privatePeLabel,
+    activeLabel: peSingleFailoverPair ? "single custom domain → active" : null,
+    standbyLabel: peSingleFailoverPair ? "standby (manual failover)" : null,
   };
 
   return {
@@ -2019,18 +2051,26 @@ function buildArchitectureSvg(model) {
     connectors.push(`<path d="M ${pf.outX} ${pf.outFromY} L ${pf.sideX} ${pf.outFromY} L ${pf.sideX} ${pf.primaryBusY}" fill="none" ${peDash}/>`);
     if (pf.primaryTargets.length) {
       const xs = pf.primaryTargets.map((t) => t.x);
-      connectors.push(`<line x1="${pf.sideX}" y1="${pf.primaryBusY}" x2="${Math.max(pf.sideX, ...xs)}" y2="${pf.primaryBusY}" ${peDash}/>`);
+      const busEndX = Math.max(pf.sideX, ...xs);
+      connectors.push(`<line x1="${pf.sideX}" y1="${pf.primaryBusY}" x2="${busEndX}" y2="${pf.primaryBusY}" ${peDash}/>`);
       pf.primaryTargets.forEach((t) => {
         connectors.push(`<line x1="${t.x}" y1="${pf.primaryBusY}" x2="${t.x}" y2="${t.y}" ${peFlow}/>`);
       });
+      if (pf.activeLabel) {
+        connectors.push(T((pf.sideX + busEndX) / 2, pf.primaryBusY - 5, pf.activeLabel, { fill: C.net, size: 9, weight: 600, anchor: "middle" }));
+      }
     }
     if (pf.additionalBusY != null && pf.additionalTargets.length) {
       connectors.push(`<line x1="${pf.sideX}" y1="${pf.primaryBusY}" x2="${pf.sideX}" y2="${pf.additionalBusY}" ${peDash}/>`);
       const xs2 = pf.additionalTargets.map((t) => t.x);
-      connectors.push(`<line x1="${pf.sideX}" y1="${pf.additionalBusY}" x2="${Math.max(pf.sideX, ...xs2)}" y2="${pf.additionalBusY}" ${peDash}/>`);
+      const busEndX2 = Math.max(pf.sideX, ...xs2);
+      connectors.push(`<line x1="${pf.sideX}" y1="${pf.additionalBusY}" x2="${busEndX2}" y2="${pf.additionalBusY}" ${peDash}/>`);
       pf.additionalTargets.forEach((t) => {
         connectors.push(`<line x1="${t.x}" y1="${pf.additionalBusY}" x2="${t.x}" y2="${t.y}" ${peFlow}/>`);
       });
+      if (pf.standbyLabel) {
+        connectors.push(T((pf.sideX + busEndX2) / 2, pf.additionalBusY - 5, pf.standbyLabel, { fill: C.muted, size: 9, anchor: "middle" }));
+      }
     }
   }
 
@@ -2193,13 +2233,18 @@ function buildArchitectureDrawio(model) {
   cells.push(vertex(nextId(), "", jfrogLogoDrawioStyle(), route.x + 10, route.y + (route.h - 20) / 2, 20, 20));
   // Real source->target edge to every Primary and Additional site — never a bare
   // source/target-less point edge (see the earlier Lucid-import fix for why).
+  // Pushed to `deferredFanoutEdges`, not `cells`, directly: these edges run down into the
+  // lane containers below, and mxCell z-order is draw order, so if they were added here
+  // (before the lanes) the lanes' opaque fill would paint straight over them, silently
+  // hiding every fan-out arrow (and the labels on them) the moment it enters a lane.
+  const deferredFanoutEdges = [];
   const routeEdgeStyle = `html=1;dashed=1;dashPattern=6 4;endArrow=blockThin;endFill=1;strokeColor=${C.route};strokeWidth=1.6;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;`;
   route.primaryTargets.forEach((t) => {
-    cells.push(connect("", `${routeEdgeStyle}exitX=0.5;exitY=1;`, route.id, t.id));
+    deferredFanoutEdges.push(connect("", `${routeEdgeStyle}exitX=0.5;exitY=1;`, route.id, t.id));
   });
   if (route.additionalFan) {
     route.additionalFan.targets.forEach((t) => {
-      cells.push(connect("", `${routeEdgeStyle}exitX=1;exitY=0.5;`, route.id, t.id));
+      deferredFanoutEdges.push(connect("", `${routeEdgeStyle}exitX=1;exitY=0.5;`, route.id, t.id));
     });
   }
 
@@ -2219,12 +2264,14 @@ function buildArchitectureDrawio(model) {
     if (peIconStyle) {
       cells.push(vertex(nextId(), "", peIconStyle, pf.x + 10, pf.y + (pf.h - 24) / 2, 24, 24));
     }
-    const peEdgeStyle = `html=1;dashed=1;dashPattern=4 3;endArrow=blockThin;endFill=1;strokeColor=${C.net};strokeWidth=1.4;edgeStyle=orthogonalEdgeStyle;exitX=0;exitY=0.5;entryX=0.5;entryY=0;`;
+    const peEdgeStyle = `html=1;dashed=1;dashPattern=4 3;endArrow=blockThin;endFill=1;strokeColor=${C.net};strokeWidth=1.4;edgeStyle=orthogonalEdgeStyle;exitX=0;exitY=0.5;entryX=0.5;entryY=0;fontSize=9;fontStyle=1;fontColor=${C.net};labelBackgroundColor=#ffffff;`;
     pf.primaryTargets.forEach((t) => {
-      cells.push(connect("", peEdgeStyle, pf.id, t.id));
+      deferredFanoutEdges.push(connect(pf.activeLabel || "", peEdgeStyle, pf.id, t.id));
     });
+    const peEdgeStyleAdditional = peEdgeStyle.replace("entryX=0.5;entryY=0;", "entryX=1;entryY=0.5;")
+      .replace(`fontStyle=1;fontColor=${C.net}`, `fontColor=${C.muted}`);
     pf.additionalTargets.forEach((t) => {
-      cells.push(connect("", peEdgeStyle.replace("entryX=0.5;entryY=0;", "entryX=1;entryY=0.5;"), pf.id, t.id));
+      deferredFanoutEdges.push(connect(pf.standbyLabel || "", peEdgeStyleAdditional, pf.id, t.id));
     });
   }
 
@@ -2251,6 +2298,10 @@ function buildArchitectureDrawio(model) {
       cell.x, cell.y, cell.w, cell.h,
     ));
   });
+
+  // Now that the (opaque) lane backgrounds are down, it's safe to draw the fan-out edges
+  // that run into them — see the comment by deferredFanoutEdges above.
+  cells.push(...deferredFanoutEdges);
 
   layout.nodes.forEach((node) => {
     const value = `<b>${esc(node.title)}</b><br><font color="${C.muted}">${esc(node.sub)}</font>`;
