@@ -215,8 +215,16 @@ assert(/On-Prem ↔ Cloud/.test(drawio), "On-Prem ↔ Cloud box missing even tho
 // self-contained embedded images, never a reference to draw.io's internal shape-library
 // names — those were guessed by naming convention for GCP, never confirmed against
 // draw.io's actual registry, and silently rendered blank ("images missing") for users.
-assert(/image=data:image\/svg\+xml;base64,[A-Za-z0-9+/=]+;/.test(drawio),
-  "draw.io export is missing embedded (data: URI) cloud-provider icons");
+// Must be the bare-comma short form (no ";base64," at all): mxGraph/draw.io's style
+// parser splits the whole style string on ";", so any literal ";" inside the image= value
+// (encoded as %3B or not) truncates it and the icon renders blank when opened in draw.io.
+// draw.io's own postProcessCellStyle inserts ";base64," before the comma at render time —
+// confirmed against the live draw.io app, including real .drawio files out on GitHub that
+// get this wrong and silently render blank icons.
+assert(/image=data:image\/svg\+xml,[A-Za-z0-9+/=]+;/.test(drawio),
+  "draw.io export is missing embedded (data: URI) cloud-provider icons, or isn't using the bare-comma short form draw.io expects");
+assert(!/image=data:image\/svg\+xml(;|%3B)base64,/.test(drawio),
+  "draw.io style string contains a \";base64,\" (literal or %3B-encoded) inside the image= data URI — draw.io will truncate it and render a blank icon");
 assert(!/shape=mxgraph\.(aws4|gcp2)\./.test(drawio),
   "draw.io export must not reference internal aws4/gcp2 stencil names — embed the icon as a self-contained image instead");
 

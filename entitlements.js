@@ -494,7 +494,17 @@ function cloudIconDrawioStyle(provider, kind) {
     b64 = CLOUD_ICON_DATA.azureB64[kind] || null;
   }
   if (!b64) return null;
-  return `image;aspect=fixed;html=1;points=[];align=center;fontSize=10;image=data:image/svg+xml;base64,${b64};`;
+  // Must NOT contain a literal ";" — mxGraph/draw.io's cell-style parser splits the whole
+  // style string on ";", so "image=data:image/svg+xml;base64,XXXX" truncates to just
+  // "data:image/svg+xml" and drops the actual payload (confirmed against the live draw.io
+  // app, including real-world .drawio files on GitHub that have this exact bug). Percent-
+  // encoding the ";" as %3B avoids the truncation but then fails a *different* way: draw.io's
+  // renderer only recognizes the literal, un-encoded ";base64," substring as the base64 flag,
+  // so %3B also renders blank. The short-form RFC 2397 data URI below — a bare comma, no
+  // ";base64," at all — has no ";" to trip the style-string split; draw.io's own
+  // mxGraph.postProcessCellStyle detects the missing marker and inserts ";base64," right
+  // before rendering. Verified empirically: this is the only one of the three that renders.
+  return `image;aspect=fixed;html=1;points=[];align=center;fontSize=10;image=data:image/svg+xml,${b64};`;
 }
 
 /**
@@ -533,7 +543,9 @@ function jfrogLogoSvgMarkup(x, y, size) {
 function jfrogLogoDrawioStyle() {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${JFROG_LOGO.w} ${JFROG_LOGO.h}"><path fill-rule="evenodd" clip-rule="evenodd" d="${esc(JFROG_LOGO.d)}" fill="${JFROG_LOGO.fill}"/></svg>`;
   const b64 = btoa(unescape(encodeURIComponent(svg)));
-  return `image;aspect=fixed;html=1;points=[];align=center;fontSize=10;image=data:image/svg+xml;base64,${b64};`;
+  // See cloudIconDrawioStyle: must be the bare-comma short form (no ";base64,") or
+  // draw.io's style-string parser truncates this and the logo renders blank.
+  return `image;aspect=fixed;html=1;points=[];align=center;fontSize=10;image=data:image/svg+xml,${b64};`;
 }
 
 function $(id) {
@@ -1515,7 +1527,18 @@ function architectureLayout(model) {
   // when any region is On-Prem, the VPN / direct-connect link into the cloud side.
   const accessBoxW = 176;
   const accessBoxH = 46;
-  const accessGapX = 22;
+  // Wide enough to carry a short DNS-config label ("[server].pe.jfrog.io") on the
+  // connector between each pair of boxes, not just the arrow itself.
+  const accessGapX = 90;
+  // What actually gets configured at each hop, shown as the label on the connector
+  // arriving at that resource: the on-prem DNS server gets a conditional-forward zone for
+  // the wildcard, the cloud-side resolver answers the specific per-JPD hostname, and the
+  // load balancer fronts that same hostname once it's resolved to a private IP. Square
+  // brackets, not "<server>": these labels render as HTML (html=1) in the draw.io export,
+  // where a literal "<" opens an (unknown, invisible) tag and silently eats the text.
+  const accessChainLabels = ["", "*.pe.jfrog.io", "[server].pe.jfrog.io", "[server].pe.jfrog.io"];
+  const publicRouteLabel = "public: [server].jfrog.io";
+  const privatePeLabel = "private: [server].pe.jfrog.io";
   const cloudMeta = model.connectivityMeta || DIAGRAM_META[model.connectivityProvider] || DIAGRAM_META.aws;
   // iconKind looks up the real cloud-provider icon (CLOUD_ICON_DATA via cloudIconSvgMarkup /
   // cloudIconDrawioStyle) for model.connectivityProvider; null means a generic box only.
@@ -1603,6 +1626,10 @@ function architectureLayout(model) {
     pad * 2 + textW(footerLeft, 11),
     pad * 2 + textW(footerRight, 10),
     footerStacked ? 0 : footerOneLineW,
+    // The "public: [server].jfrog.io" label sits just past the Load Balancer box (the
+    // last access node), offset from its center same as in the SVG/drawio renderers below —
+    // without this the diagram width doesn't leave room for it and it gets clipped.
+    gridX + accessRowW - accessBoxW / 2 + 10 + textW(publicRouteLabel, 9) + pad,
   ));
   const footerLineGap = 18;
   const extraFooterH = (footerStacked ? footerLineGap : 0) + footerLineGap + 4;
@@ -1725,7 +1752,7 @@ function architectureLayout(model) {
   for (let i = 0; i < accessNodes.length - 1; i++) {
     const a = accessNodes[i];
     const b = accessNodes[i + 1];
-    accessConnectors.push({ x1: a.x + a.w, y1: a.y + a.h / 2, x2: b.x, y2: b.y + b.h / 2 });
+    accessConnectors.push({ x1: a.x + a.w, y1: a.y + a.h / 2, x2: b.x, y2: b.y + b.h / 2, label: accessChainLabels[i] });
   }
   // Real per-service cloud icons only exist for actual cloud providers (aws/azure/gcp);
   // an on-prem-only connectivity provider falls back to plain labeled boxes.
@@ -1814,6 +1841,7 @@ function architectureLayout(model) {
     primaryTargets,
     additionalFan,
     clientBypass,
+    inLabel: publicRouteLabel,
   };
 
   // Private Endpoint(s): one dedicated connection per writable site, wired directly — never
@@ -1840,6 +1868,7 @@ function architectureLayout(model) {
     additionalBusY: additionalRow ? additionalRow.y - 20 : null,
     additionalTargets: anchors.additional.map((a) => ({ x: centerX(a), y: a.y, id: a.id })),
     cloudNativeBypass,
+    inLabel: privatePeLabel,
   };
 
   return {
@@ -1920,6 +1949,9 @@ function buildArchitectureSvg(model) {
   });
   acc.connectors.forEach((c) => {
     connectors.push(`<line x1="${c.x1}" y1="${c.y1}" x2="${c.x2}" y2="${c.y2}" class="jfd-flow jfd-flow-net" stroke="${C.net}" stroke-width="1.4" marker-end="url(#geo-net)"/>`);
+    if (c.label) {
+      connectors.push(T((c.x1 + c.x2) / 2, c.y1 - 6, c.label, { fill: C.muted, size: 8, anchor: "middle" }));
+    }
   });
   background.push(T(pad, acc.captionY, acc.caption, { fill: C.muted, size: 10 }));
 
@@ -1927,6 +1959,9 @@ function buildArchitectureSvg(model) {
   const route = layout.route;
   background.push(T(pad, route.labelY, "PRIVATE ENDPOINT · JFROG-SIDE ROUTING", { fill: C.route, size: 10, weight: 600 }));
   connectors.push(`<path d="M ${route.inFromX} ${route.inFromY} C ${route.inFromX} ${(route.inFromY + route.inToY) / 2}, ${route.inToX} ${(route.inFromY + route.inToY) / 2}, ${route.inToX} ${route.inToY}" fill="none" class="jfd-flow jfd-flow-net" stroke="${C.net}" stroke-width="1.4" marker-end="url(#geo-net)"/>`);
+  if (route.inLabel) {
+    connectors.push(T(route.inFromX + 10, (route.inFromY + route.inToY) / 2, route.inLabel, { fill: C.muted, size: 9 }));
+  }
   // Optional path: an on-prem client can skip the VPN + private-endpoint chain entirely
   // and reach the public routing URL directly over the internet.
   if (route.clientBypass) {
@@ -1962,6 +1997,9 @@ function buildArchitectureSvg(model) {
   const pf = layout.peFan;
   if (pf) {
     connectors.push(`<path d="M ${pf.inFromX} ${pf.inFromY} C ${pf.inFromX} ${(pf.inFromY + pf.inToY) / 2}, ${pf.inToX} ${(pf.inFromY + pf.inToY) / 2}, ${pf.inToX} ${pf.inToY}" fill="none" class="jfd-flow jfd-flow-net" stroke="${C.net}" stroke-width="1.4" marker-end="url(#geo-net)"/>`);
+    if (pf.inLabel) {
+      connectors.push(T(pf.inFromX - 10, (pf.inFromY + pf.inToY) / 2, pf.inLabel, { fill: C.muted, size: 9, anchor: "end" }));
+    }
     // Optional path: a cloud-native client/service already inside the same VPC/VNet as the
     // private endpoint needs neither the VPN nor the on-prem DNS bridge — it reaches the
     // endpoint directly (the cloud's own default resolver already answers the private zone).
@@ -2136,9 +2174,9 @@ function buildArchitectureDrawio(model) {
       cells.push(vertex(nextId(), "", iconStyle, node.x + ICON_PAD_DIO, node.y + (node.h - ICON_SIZE_DIO) / 2, ICON_SIZE_DIO, ICON_SIZE_DIO));
     }
   });
-  const netChainStyle = `html=1;endArrow=blockThin;endFill=1;strokeColor=${C.net};strokeWidth=1.4;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;`;
+  const netChainStyle = `html=1;endArrow=blockThin;endFill=1;strokeColor=${C.net};strokeWidth=1.4;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=9;fontColor=${C.muted};labelBackgroundColor=#ffffff;`;
   for (let i = 0; i < acc.nodes.length - 1; i++) {
-    cells.push(connect("", netChainStyle, acc.nodes[i].id, acc.nodes[i + 1].id));
+    cells.push(connect(acc.connectors[i]?.label || "", netChainStyle, acc.nodes[i].id, acc.nodes[i + 1].id));
   }
   cells.push(label(acc.caption, `align=left;verticalAlign=middle;fontSize=10;fontColor=${C.muted};`, layout.pad, acc.captionY - 12, layout.W - layout.pad * 2, 18));
 
@@ -2147,7 +2185,7 @@ function buildArchitectureDrawio(model) {
   const route = layout.route;
   cells.push(label("PRIVATE ENDPOINT · JFROG-SIDE ROUTING", `align=left;verticalAlign=middle;fontSize=10;fontStyle=1;fontColor=${C.route};`, layout.pad, route.labelY - 12, 220, 18));
   const lbNode = acc.nodes.find((n) => n.iconKind === "lb") || acc.nodes[acc.nodes.length - 1];
-  cells.push(connect("", `html=1;endArrow=blockThin;endFill=1;strokeColor=${C.net};strokeWidth=1.4;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;`, lbNode.id, route.id));
+  cells.push(connect(route.inLabel || "", `html=1;endArrow=blockThin;endFill=1;strokeColor=${C.net};strokeWidth=1.4;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=9;fontColor=${C.muted};labelBackgroundColor=#ffffff;`, lbNode.id, route.id));
   if (route.clientBypass) {
     cells.push(connect("public: via JFrog DNS routing", `html=1;dashed=1;dashPattern=3 4;endArrow=blockThin;endFill=1;strokeColor=${C.muted};strokeWidth=1.2;fontColor=${C.muted};fontSize=9;edgeStyle=orthogonalEdgeStyle;exitX=0.5;exitY=1;entryX=0.15;entryY=0;`, acc.nodes[0].id, route.id));
   }
@@ -2170,7 +2208,7 @@ function buildArchitectureDrawio(model) {
   // site, wired directly, never through the routing box right beside it.
   const pf = layout.peFan;
   if (pf) {
-    cells.push(connect("", `html=1;endArrow=blockThin;endFill=1;strokeColor=${C.net};strokeWidth=1.4;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;`, lbNode.id, pf.id));
+    cells.push(connect(pf.inLabel || "", `html=1;endArrow=blockThin;endFill=1;strokeColor=${C.net};strokeWidth=1.4;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=9;fontColor=${C.muted};labelBackgroundColor=#ffffff;`, lbNode.id, pf.id));
     if (pf.cloudNativeBypass) {
       cells.push(connect("cloud-native: same VPC, no VPN", `html=1;dashed=1;dashPattern=3 4;endArrow=blockThin;endFill=1;strokeColor=${C.muted};strokeWidth=1.2;fontColor=${C.muted};fontSize=9;edgeStyle=orthogonalEdgeStyle;exitX=0.5;exitY=1;entryX=0.85;entryY=0;`, acc.nodes[0].id, pf.id));
     }
