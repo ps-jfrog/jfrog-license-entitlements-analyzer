@@ -50,9 +50,9 @@
     <div class="field">
       <label>Deployment model</label>
       <div class="radio-group">
-        <label><input type="radio" name="deployModel" value="saas" checked /> SaaS</label>
-        <label><input type="radio" name="deployModel" value="selfmanaged" /> Self-managed</label>
-        <label><input type="radio" name="deployModel" value="hybrid" /> Hybrid (SaaS + On-Prem)</label>
+        <label><input type="radio" name="deployModel" value="saas" checked /> Fully Managed</label>
+        <label><input type="radio" name="deployModel" value="selfmanaged" /> Self Managed</label>
+        <label><input type="radio" name="deployModel" value="hybrid" /> Hybrid (Fully Managed + Self Managed)</label>
       </div>
       <span class="hint" id="deployHint"></span>
     </div>
@@ -60,16 +60,16 @@
     <div class="field" id="platformQtyBlock">
       <label for="platformQty">Platform quantity (primary packs)</label>
       <input type="number" id="platformQty" min="1" step="1" value="1" />
-      <span class="hint" id="platformQtyHint">SaaS: primary tenant packs. Self-managed: base packs (1 / 3 / 6 servers each by tier). Extra SaaS JPDs → Additional Platform Instance below.</span>
+      <span class="hint" id="platformQtyHint">Fully Managed: primary tenant packs. Self Managed: base packs (1 / 3 / 6 servers each by tier). Extra Fully Managed JPDs → Additional Platform Instance below.</span>
     </div>
 
     <div class="field-row two" id="hybridQtyBlock" style="display:none">
       <div class="field">
-        <label for="saasPlatformQty">SaaS primary packs (Cloud Enterprise+ / X)</label>
+        <label for="saasPlatformQty">Fully Managed primary packs (Cloud Enterprise+ / X)</label>
         <input type="number" id="saasPlatformQty" min="1" step="1" value="1" />
       </div>
       <div class="field">
-        <label for="selfManagedPlatformQty">On-Prem packs (Enterprise+ MP / X MP)</label>
+        <label for="selfManagedPlatformQty">Self Managed packs (Enterprise+ MP / X MP)</label>
         <input type="number" id="selfManagedPlatformQty" min="1" step="1" value="1" />
         <span class="hint">Customer can hold both SKUs at once — count each side separately.</span>
       </div>
@@ -85,12 +85,12 @@
         <label><input type="radio" name="iaas" value="gcp" /> GCP</label>
         <label><input type="radio" name="iaas" value="onprem" /> On-Prem DC</label>
       </div>
-      <span class="hint">Each region row has its own provider. Use this only as the default when you click <strong>+ Add region</strong>. Hybrid example: SaaS row on GCP + On-Prem JPS row on Azure.</span>
+      <span class="hint">Each region row has its own provider. Use this only as the default when you click <strong>+ Add region</strong>. Hybrid example: Fully Managed row on GCP + Self Managed row on Azure.</span>
     </div>
 
     <div class="field">
       <label>Regions &amp; what runs where</label>
-      <span class="hint" style="display:block;margin-bottom:8px">One row per location. Set <strong>Provider</strong> and <strong>Site</strong> (SaaS JPD vs On-Prem JPS) per row. A row needs at least one Primary / Additional / Edge count to appear in the diagram. Blank or non-geographic names (On-Prem DC, etc.) land in <strong>OTHER</strong>, separate from Central. Diagram groups into <strong>West | Central | East | Other</strong>.</span>
+      <span class="hint" style="display:block;margin-bottom:8px">One row per location. Set <strong>Provider</strong> and <strong>Site</strong> (Fully Managed vs Self Managed) per row. A row needs at least one Primary / Additional / Edge count to appear in the diagram. Blank or non-geographic names (On-Prem DC, etc.) land in <strong>OTHER</strong>, separate from Central. Diagram groups into <strong>West | Central | East | Other</strong>.</span>
       <div id="regionList"></div>
       <div class="btn-row" style="margin-top:8px">
         <button type="button" id="btnAddRegion">+ Add region</button>

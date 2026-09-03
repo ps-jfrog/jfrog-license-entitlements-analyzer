@@ -100,7 +100,7 @@ assert(/Monitoring —/.test(svg), "monitoring callout missing");
 // Header must not overlap: title and product list live on separate lines.
 const texts = [...svg.matchAll(/<text[^>]*y="(\d+(?:\.\d+)?)"[^>]*>([^<]*)<\/text>/g)]
   .map((m) => ({ y: Number(m[1]), value: m[2] }));
-const titleNode = texts.find((t) => /Hybrid SaaS \+ On-Prem/.test(t.value));
+const titleNode = texts.find((t) => /Hybrid Fully Managed \+ Self Managed/.test(t.value));
 assert(titleNode, "diagram title missing");
 const productNode = texts.find((t) => t !== titleNode && /Distribution|Platform baseline/.test(t.value) && t.y < 60);
 assert(productNode, "product line missing from header");
@@ -131,6 +131,24 @@ function footerNoOverlap(markup, label) {
   assert(leftEnd <= viewW, `${label}: footer left "${left.value}" is clipped by canvas width (${leftEnd.toFixed(0)} > ${viewW})`);
 }
 footerNoOverlap(svg, "hybrid");
+
+// The geography lane boxes (WEST/CENTRAL/EAST/OTHER REGIONS) must stop clear above the
+// Monitoring line in the footer — regression for a real bug where the lane rect's height
+// only left room for the footer's own 2 lines, not the extra Monitoring line squeezed in
+// above them, so the lane box's bottom edge clipped into the Monitoring text's ascenders.
+function regionsNoOverlapMonitoring(markup, label) {
+  const laneRects = [...markup.matchAll(/<rect x="([0-9.]+)" y="([0-9.]+)" width="([0-9.]+)" height="([0-9.]+)" rx="8"/g)]
+    .map((m) => ({ y: Number(m[2]), h: Number(m[4]) }));
+  const monitorText = [...markup.matchAll(/<text x="(-?\d+(?:\.\d+)?)" y="(\d+(?:\.\d+)?)"[^>]*>(Monitoring[^<]*)<\/text>/g)]
+    .map((m) => ({ y: Number(m[2]) }));
+  assert(laneRects.length, `${label}: no geography lane boxes found`);
+  assert(monitorText.length, `${label}: Monitoring line not found`);
+  const laneBottom = Math.max(...laneRects.map((r) => r.y + r.h));
+  const monitorY = Math.min(...monitorText.map((t) => t.y));
+  // ~9px ascender headroom above the text baseline is enough to catch a real clip.
+  assert(monitorY - 9 >= laneBottom, `${label}: lane box bottom (${laneBottom}) overlaps Monitoring line (baseline ${monitorY})`);
+}
+regionsNoOverlapMonitoring(svg, "hybrid");
 
 // Full topology (primary + additional + edge) exercises both animated flows and
 // gives the draw.io export something to connect.
@@ -245,6 +263,7 @@ $("saasUnitSizeGB").value = "1000";
 window.addRegionRow({ iaas: "aws", siteKind: "saas", region: "us-east-1", primary: 1, edge: 2 });
 $("btnAnalyze").click();
 footerNoOverlap(window.__lastDiagramSvg, "narrow-saas");
+regionsNoOverlapMonitoring(window.__lastDiagramSvg, "narrow-saas");
 
 // Pure-cloud SaaS with no On-Prem region — on-prem CI/CD clients connecting to this
 // instance are a scenario every customer has regardless of their purchased topology, so
@@ -253,6 +272,71 @@ footerNoOverlap(window.__lastDiagramSvg, "narrow-saas");
 assert(/On-Prem ↔ Cloud/.test(window.__lastDiagramSvg || ""), "On-Prem ↔ Cloud connectivity box should always be shown, regardless of the purchased topology (SVG)");
 assert(/On-Prem ↔ Cloud/.test(window.__lastDiagramDrawio || ""), "On-Prem ↔ Cloud connectivity box should always be shown, regardless of the purchased topology (draw.io)");
 assert(/public: via JFrog DNS routing/.test(window.__lastDiagramSvg || ""), "public/no-private-connectivity bypass label missing for a pure-SaaS scenario");
+
+// A region row's own Site Kind is the source of truth for whether PrivateLink/PSC +
+// MyJFrog DNS Routing apply — not the separate top-level Deploy Model radio, which can
+// drift out of sync with it (left on "SaaS" while a row is explicitly marked "On-Prem
+// JPS" on a cloud provider like AWS). Regression for a real bug: the SaaS-only Private
+// Endpoint / JFrog-side DNS routing / VPN / DNS Resolver boxes used to still render,
+// dangling with zero connections, whenever this mismatch happened.
+$("regionList").innerHTML = "";
+window.document.querySelector('input[name="deployModel"][value="saas"]').checked = true;
+window.addRegionRow({ iaas: "aws", siteKind: "selfmanaged", region: "us-east-1", primary: 1 });
+$("btnAnalyze").click();
+const mismatchSvg = window.__lastDiagramSvg || "";
+assert(/Primary JPS 1/.test(mismatchSvg), "self-managed site should render as a JPS");
+assert(!/JFrog-side DNS routing/.test(mismatchSvg), "self-managed-only topology must not draw JFrog-side DNS routing, even with Deploy Model left on SaaS");
+assert(!/Private Endpoint\(s\)/.test(mismatchSvg), "self-managed-only topology must not draw a Private Endpoint box, even with Deploy Model left on SaaS");
+assert(!/On-Prem ↔ Cloud/.test(mismatchSvg), "self-managed-only topology has no PrivateLink chain to bridge into, so no VPN box either");
+assert(/Primary LB 1/.test(mismatchSvg) && /no MyJFrog DNS routing or Private Endpoints/.test(mismatchSvg), "self-managed regional LB band missing");
+regionsNoOverlapMonitoring(mismatchSvg, "self-managed mismatch");
+
+// Self-managed multi-site: both Datacenter and Cloud client populations are always shown
+// (even when every site happens to run on a cloud IaaS), each writable site gets its own
+// regional Load Balancer, and Primary/Additional still federate with each other.
+$("regionList").innerHTML = "";
+window.addRegionRow({ iaas: "aws", siteKind: "selfmanaged", region: "us-east-1", primary: 2 });
+window.addRegionRow({ iaas: "azure", siteKind: "selfmanaged", region: "westeurope", additional: 2 });
+$("btnAnalyze").click();
+const smSvg = window.__lastDiagramSvg || "";
+assert(/Datacenter clients/.test(smSvg), "Datacenter clients box should always be shown for self-managed, not just when an on-prem region is present");
+assert(/Cloud clients/.test(smSvg), "Cloud clients box should always be shown for self-managed");
+assert((smSvg.match(/Primary LB \d/g) || []).length === 2, "expected one regional LB per Primary site");
+assert((smSvg.match(/Additional LB \d/g) || []).length === 2, "expected one regional LB per Additional site");
+assert(/Repository (Federation|Replication)/.test(smSvg), "self-managed Primary/Additional sites should still federate/replicate with each other");
+const smDrawio = window.__lastDiagramDrawio || "";
+assert(!/sourcePoint|targetPoint/.test(smDrawio), "self-managed regional LB edges must not be bare source/target-less point edges");
+
+// Self-managed: Datacenter clients reach a cloud-hosted JPS over a VPN; Cloud clients
+// bypass it (already inside the same network); a single Global Load Balancer sits
+// between the client band and the per-site Regional LBs, routing by active JPD(s).
+assert(/Cloud ↔ Private DC VPN/.test(smSvg), "self-managed VPN hop missing");
+assert(/Global Load Balancer/.test(smSvg), "self-managed Global Load Balancer missing");
+assert(/Cloud clients/.test(smSvg) && /Global Load Balancer/.test(smSvg), "Cloud clients / Global LB boxes should sit in the same row (no VPN hop between them)");
+const smNodeIds = [...smDrawio.matchAll(/<mxCell id="([^"]+)"[^>]* vertex="1"/g)].map((m) => m[1]);
+const smEdges = [...smDrawio.matchAll(/edge="1" parent="1" source="([^"]+)" target="([^"]+)"/g)];
+assert(smEdges.every(([, s, t]) => smNodeIds.includes(s) && smNodeIds.includes(t)), "self-managed VPN/Global LB edges must point at real shapes");
+// Only the Global LB feeds the Regional LBs — not every access-band node (a stale bug
+// used to wire every client/VPN box straight to every Regional LB too).
+assert(smEdges.filter(([, s, t]) => /^smlb/.test(t)).every(([, s]) => s === "acgloballb"),
+  "only the Global Load Balancer should feed the Regional LB boxes");
+
+// The 2×2 self-managed access grid (Datacenter/Cloud clients left, VPN/Global LB right)
+// must be wired with plain horizontal/vertical connectors only — never a diagonal —
+// and the "REGIONAL LOAD BALANCERS" band label must clear the horizontal client→LB bus
+// underneath it (regression: they used to sit only ~4px apart, so the bus line clipped
+// straight into the label text as soon as any Regional LB boxes were added).
+const smLines = [...smSvg.matchAll(/<line x1="(-?[\d.]+)" y1="(-?[\d.]+)" x2="(-?[\d.]+)" y2="(-?[\d.]+)"[^>]*class="jfd-flow jfd-flow-net"/g)]
+  .map((m) => ({ x1: +m[1], y1: +m[2], x2: +m[3], y2: +m[4] }));
+assert(smLines.length > 0, "self-managed access band should have plain <line> connectors");
+assert(smLines.every((l) => l.x1 === l.x2 || l.y1 === l.y2), "self-managed access-band connectors must be strictly horizontal or vertical (right-angled), never diagonal");
+const smLabelText = [...smSvg.matchAll(/<text x="(-?[\d.]+)" y="([\d.]+)"[^>]*>(REGIONAL LOAD BALANCERS[^<]*)<\/text>/g)]
+  .map((m) => ({ y: +m[2] }));
+assert(smLabelText.length, "REGIONAL LOAD BALANCERS band label missing");
+const smBusYs = smLines.filter((l) => l.y1 === l.y2 && l.y1 > smLabelText[0].y).map((l) => l.y1);
+if (smBusYs.length) {
+  assert(Math.min(...smBusYs) - smLabelText[0].y >= 10, "the client→LB bus line sits too close under the REGIONAL LOAD BALANCERS label and will clip its text");
+}
 
 // True Central geography still uses CENTRAL (not OTHER).
 $("regionList").innerHTML = "";
@@ -282,5 +366,40 @@ $("regionList").innerHTML = "";
 $("customerName").value = "";
 window.render(null);
 assert(!window.hasReportContent(), "hasReportContent should be false before any Analyze");
+
+// Every diagram connector must be a right-angled line/elbow, never a diagonal bezier
+// curve, and must render to real numbers — regression for arrows that used to cut
+// diagonally across the diagram (and could overlap boxes/labels as a result).
+function assertRightAngledOnly(svg, label) {
+  const paths = [...svg.matchAll(/<path d="([^"]+)"/g)].map((m) => m[1]);
+  assert(paths.every((p) => !p.includes(" C ")), `${label}: diagram still contains a diagonal bezier curve (" C ") — every connector must be a straight line or right-angled elbow`);
+  assert(paths.every((p) => !/NaN|undefined/.test(p)), `${label}: a connector path contains NaN/undefined — geometry inputs are missing`);
+  const lines = [...svg.matchAll(/<line x1="(-?[\d.]+)" y1="(-?[\d.]+)" x2="(-?[\d.]+)" y2="(-?[\d.]+)"/g)]
+    .map((m) => ({ x1: +m[1], y1: +m[2], x2: +m[3], y2: +m[4] }));
+  assert(lines.every((l) => l.x1 === l.x2 || l.y1 === l.y2), `${label}: a <line> connector is diagonal (neither x1===x2 nor y1===y2)`);
+}
+$("regionList").innerHTML = "";
+window.document.querySelector('input[name="deployModel"][value="hybrid"]').checked = true;
+window.addRegionRow({ iaas: "gcp", siteKind: "saas", region: "us-east1", primary: 2 });
+window.addRegionRow({ iaas: "azure", siteKind: "saas", region: "westeurope", additional: 2 });
+window.addRegionRow({ iaas: "onprem", siteKind: "selfmanaged", region: "Primary DC", primary: 1, edge: 2 });
+$("btnAnalyze").click();
+assertRightAngledOnly(window.__lastDiagramSvg || "", "hybrid multi-site");
+// draw.io only routes an edge as right-angled when edgeStyle=orthogonalEdgeStyle is set —
+// without it, an edge between boxes that aren't x/y-aligned renders as a diagonal line
+// regardless of the exit/entry side chosen.
+const hybridDrawio = window.__lastDiagramDrawio || "";
+const hybridEdgeStyles = [...hybridDrawio.matchAll(/<mxCell id="s\d+" value="[^"]*" style="([^"]*)" edge="1"/g)].map((m) => m[1]);
+assert(hybridEdgeStyles.length > 0, "expected draw.io edges in hybrid scenario");
+assert(hybridEdgeStyles.every((s) => s.includes("edgeStyle=orthogonalEdgeStyle")),
+  "every draw.io connector must set edgeStyle=orthogonalEdgeStyle or it can render as a diagonal line");
+
+$("regionList").innerHTML = "";
+window.document.querySelector('input[name="deployModel"][value="selfmanaged"]').checked = true;
+window.addRegionRow({ iaas: "aws", siteKind: "selfmanaged", region: "us-east-1", primary: 2 });
+window.addRegionRow({ iaas: "azure", siteKind: "selfmanaged", region: "westeurope", additional: 2 });
+window.addRegionRow({ iaas: "onprem", siteKind: "selfmanaged", region: "Primary DC", additional: 1 });
+$("btnAnalyze").click();
+assertRightAngledOnly(window.__lastDiagramSvg || "", "self-managed multi-site");
 
 console.log("UI smoke tests passed.");

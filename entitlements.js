@@ -234,7 +234,7 @@ const ADDONS = {
     baseSeats: null,
     includes: [],
     excludes: [],
-    note: "SaaS only: extra writable JPD / tenant. Place each instance in a region.",
+    note: "Fully Managed only: extra writable JPD / tenant. Place each instance in a region.",
   },
   additionalServers: {
     id: "additionalServers",
@@ -366,7 +366,7 @@ const PS_CHECKLIST = [
   },
   {
     title: "Second writable JPS needs its own entitlements",
-    detail: "US + EU prod (or SaaS + self-managed hybrid) = second deployment / subscription, not free with HA.",
+    detail: "US + EU prod (or Fully Managed + Self Managed hybrid) = second deployment / subscription, not free with HA.",
   },
   {
     title: "Map security seats correctly",
@@ -666,16 +666,16 @@ function analyze(input) {
 
   // Deploy model sanity
   if (tier.model === "saas" && input.deployModel === "selfmanaged") {
-    warnings.push("Pro is SaaS-only. Treat this as a SaaS tenant, not a self-managed install.");
+    warnings.push("Pro is Fully Managed only. Treat this as a Fully Managed tenant, not a Self Managed install.");
   }
   if (tier.model === "selfmanaged" && input.deployModel === "saas") {
-    warnings.push("Pro X is self-managed only. There is no SaaS Pro X SKU — scanning on SaaS requires Enterprise X.");
+    warnings.push("Pro X is Self Managed only. There is no SaaS Pro X SKU — scanning on Fully Managed requires Enterprise X.");
   }
   if (input.deployModel === "hybrid") {
     if (tier.model === "saas" || tier.model === "selfmanaged") {
-      warnings.push(`${tier.name} cannot be hybrid by itself — hybrid needs Enterprise X / Enterprise + on both Cloud and On-Prem lines.`);
+      warnings.push(`${tier.name} cannot be hybrid by itself — hybrid needs Enterprise X / Enterprise + on both Cloud and Self Managed lines.`);
     } else {
-      infos.push("Hybrid order: Cloud (SaaS) and Enterprise+ MP / Enterprise X MP (On-Prem) can both be licensed at once. Treat each side as its own deployment for topology; federation between them is optional and contractual.");
+      infos.push("Hybrid order: Cloud (Fully Managed) and Enterprise+ MP / Enterprise X MP (Self Managed) can both be licensed at once. Treat each side as its own deployment for topology; federation between them is optional and contractual.");
     }
   }
 
@@ -736,13 +736,13 @@ function analyze(input) {
   } else if (input.deployModel === "saas") {
     serversTotal = null;
     if (effectiveSaasQty > 1) {
-      infos.push(`SaaS platform quantity ${effectiveSaasQty} typically means ${effectiveSaasQty} primary tenant pack(s).`);
+      infos.push(`Fully Managed platform quantity ${effectiveSaasQty} typically means ${effectiveSaasQty} primary tenant pack(s).`);
     }
   } else if (input.deployModel === "hybrid") {
     if (serversIncluded != null) {
       serversTotal = serversIncluded * effectiveSmQty + additionalServers;
     }
-    infos.push(`Hybrid capacity: SaaS primary packs ×${effectiveSaasQty}; On-Prem packs ×${effectiveSmQty}${serversIncluded != null ? ` → ${serversTotal} server license(s)` : ""}.`);
+    infos.push(`Hybrid capacity: Fully Managed primary packs ×${effectiveSaasQty}; Self Managed packs ×${effectiveSmQty}${serversIncluded != null ? ` → ${serversTotal} server license(s)` : ""}.`);
   }
 
   const additionalInstances = input.addons.additionalInstances || 0;
@@ -773,7 +773,7 @@ function analyze(input) {
     warnings.push("No region deployments entered — Primary / Additional / Edge rows with a count are drawn on the architecture diagram (blank region → OTHER column).");
   } else {
     if ((input.deployModel === "saas" || input.deployModel === "hybrid") && regionWritable > 0 && regionWritable !== writableSites) {
-      warnings.push(`Region rows show ${regionWritable} writable JPD(s) but order math is ${writableSites} (SaaS primary ${effectiveSaasQty} + Additional Platform Instance ${additionalInstances}). Align the topology with the order — On-Prem JPS may be listed separately.`);
+      warnings.push(`Region rows show ${regionWritable} writable JPD(s) but order math is ${writableSites} (Fully Managed primary ${effectiveSaasQty} + Additional Platform Instance ${additionalInstances}). Align the topology with the order — Self Managed sites may be listed separately.`);
     }
     // Same rule both ways: region Edge placement must match the Edge SKU (including SKU unchecked → expect 0).
     if (regionEdge !== edgeCount) {
@@ -832,7 +832,7 @@ function analyze(input) {
     infos.push("Baseline Xray SCA is included with this platform. JAS / Curation / Catalog require a security bundle or à-la-carte add-on.");
   }
   if (!tier.features.xray) {
-    warnings.push("This platform does not include Xray. No SCA, build-scan, or SBOM export from Xray until you upgrade (SaaS → Ent X, or self-managed Pro X).");
+    warnings.push("This platform does not include Xray. No SCA, build-scan, or SBOM export from Xray until you upgrade (Fully Managed → Ent X, or Self Managed Pro X).");
   }
 
   // SaaS storage / SaaSInstance
@@ -844,7 +844,7 @@ function analyze(input) {
       storageGB = fromUnits;
       storageNote = `${input.saasUnits} SaaSInstance unit(s) × ${input.saasUnitSizeGB} GB = ${formatGB(storageGB)} entitled consumption (storage + transfer meter — confirm unit definition on the order).`;
       if (input.deployModel === "hybrid") {
-        storageNote += " On-Prem side uses customer-owned filestore (not this meter).";
+        storageNote += " Self Managed side uses customer-owned filestore (not this meter).";
       }
     } else if (tier.saasBaseConsumptionGB != null) {
       storageGB = tier.saasBaseConsumptionGB;
@@ -853,7 +853,7 @@ function analyze(input) {
       storageNote = `${tier.name} SaaS storage is custom / negotiated — enter SaaSInstance units from the order form.`;
     }
   } else {
-    storageNote = "Self-managed: customer brings storage (filestore / object store). No SaaSInstance meter.";
+    storageNote = "Self Managed: customer brings storage (filestore / object store). No SaaSInstance meter.";
   }
 
   // Build capability table
@@ -1009,16 +1009,29 @@ function buildDiagramModel(input, ctx) {
   const hasOnPrem = regions.some((r) => (r.iaas || iaas) === "onprem");
   const connectivityProvider = providers.find((p) => p !== "onprem") || (iaas !== "onprem" ? iaas : "aws");
   const connectivityMeta = DIAGRAM_META[connectivityProvider] || DIAGRAM_META.aws;
-  const hasSaasSide = input.deployModel === "saas" || input.deployModel === "hybrid";
-  const hasSelfManagedSide = input.deployModel === "selfmanaged" || input.deployModel === "hybrid";
+  // The top-level Deploy Model radio (saas/hybrid/selfmanaged) can drift out of sync with
+  // what a customer actually placed on individual region rows — e.g. Deploy Model left on
+  // "SaaS" while a region row's own Site Kind is set to "On-Prem JPS". The diagram must
+  // draw PrivateLink/PSC + MyJFrog DNS Routing (SaaS-only features, see the note below)
+  // based on what's actually on the topology, not the separate top-level toggle, or a
+  // self-managed site ends up sharing a row with a dangling, unconnected Private
+  // Endpoint / JFrog-side DNS routing box that was never meant for it. Falls back to the
+  // deploy-model guess only when no writable site has been placed yet (empty state).
+  const writableSitesFlat = [...primaries, ...additionals];
+  const hasSaasSide = writableSitesFlat.length
+    ? writableSitesFlat.some((s) => (s.siteKind || "saas") === "saas")
+    : (input.deployModel === "saas" || input.deployModel === "hybrid");
+  const hasSelfManagedSide = writableSitesFlat.length
+    ? writableSitesFlat.some((s) => (s.siteKind || "saas") === "selfmanaged")
+    : (input.deployModel === "selfmanaged" || input.deployModel === "hybrid");
   const logStreaming = !!ctx.entitledCapabilities.has("logStreaming");
   const missionControl = !!ctx.entitledCapabilities.has("missionControl");
 
   const authNote = input.deployModel === "saas"
-    ? "SaaS auth — Users: SSO (SAML / OIDC) + SCIM provisioning · CI/CD: Access Tokens / OIDC (no interactive login)"
+    ? "Fully Managed auth — Users: SSO (SAML / OIDC) + SCIM provisioning · CI/CD: Access Tokens / OIDC (no interactive login)"
     : input.deployModel === "hybrid"
-      ? "Auth — SaaS side: SSO (SAML / OIDC) + SCIM for users, Access Tokens / OIDC for CI/CD · On-Prem side: platform SSO (Ent X+) + Access Tokens"
-      : "Self-managed auth — Users: platform SSO (SAML / OIDC / SCIM, Ent X+) · CI/CD: Access Tokens / OIDC";
+      ? "Auth — Fully Managed side: SSO (SAML / OIDC) + SCIM for users, Access Tokens / OIDC for CI/CD · Self Managed side: platform SSO (Ent X+) + Access Tokens"
+      : "Self Managed auth — Users: platform SSO (SAML / OIDC / SCIM, Ent X+) · CI/CD: Access Tokens / OIDC";
 
   const cloudMonitorNames = [...new Set(providers.filter((p) => p !== "onprem").map((p) => (DIAGRAM_META[p] || DIAGRAM_META.aws).monitor))].join(" / ");
   const monitoringBits = [];
@@ -1055,6 +1068,8 @@ function buildDiagramModel(input, ctx) {
     accessFederation: !!ctx.entitledCapabilities.has("accessFederation"),
     repoFederation: !!ctx.entitledCapabilities.has("federation"),
     hasOnPrem,
+    hasSaasSide,
+    hasSelfManagedSide,
     connectivityProvider,
     connectivityMeta,
     authNote,
@@ -1079,16 +1094,16 @@ function buildNextSteps(input, tier, ctx) {
     });
   } else if (input.deployModel === "hybrid") {
     steps.push({
-      title: "Separate SaaS vs On-Prem topology",
-      detail: `SaaS: ${ctx.writableSites || 1} writable tenant(s). On-Prem: ${ctx.serversTotal != null ? `${ctx.serversTotal} server license(s)` : "confirm server count"}. Do not treat HA nodes as a second Cloud tenant. Confirm whether federation / Access Federation links the two sides.`,
+      title: "Separate Fully Managed vs Self Managed topology",
+      detail: `Fully Managed: ${ctx.writableSites || 1} writable tenant(s). Self Managed: ${ctx.serversTotal != null ? `${ctx.serversTotal} server license(s)` : "confirm server count"}. Do not treat HA nodes as a second Cloud tenant. Confirm whether federation / Access Federation links the two sides.`,
     });
     steps.push({
       title: "Confirm multi-cloud / multi-IaaS placement",
-      detail: "Each topology row has its own provider (e.g. SaaS JPD on GCP + On-Prem JPS on Azure). Confirm regions, PrivateLink/PSC on the Cloud side, and customer-owned networking for On-Prem — providers need not match.",
+      detail: "Each topology row has its own provider (e.g. Fully Managed on GCP + Self Managed on Azure). Confirm regions, PrivateLink/PSC on the Cloud side, and customer-owned networking for Self Managed — providers need not match.",
     });
   } else {
     steps.push({
-      title: "Confirm SaaS region(s) and PrivateLink needs",
+      title: "Confirm Fully Managed region(s) and PrivateLink needs",
       detail: `${ctx.writableSites || 1} writable tenant(s) on the order. Multi-region / additional instances need topology agreement. Ask about PrivateLink / PSC early.`,
     });
   }
@@ -1494,10 +1509,16 @@ function architectureLayout(model) {
   const additionals = model.additionals || [];
   const edgeNodes = model.edgeNodes || [];
   const edgeSelfManaged = (model.edgeOps || "selfmanaged") === "selfmanaged";
+  // PrivateLink/PSC and MyJFrog DNS Routing are JFrog Cloud (SaaS) features — per JFrog's
+  // own docs, DNS Routing in MyJFrog explicitly excludes self-hosted JPDs, and
+  // PrivateLink/Private Service Connect only exists for the SaaS platform. A pure
+  // self-managed deployment has neither, so it gets a plain customer-owned access band
+  // instead of the SaaS Private Endpoint / JFrog-side routing bands below.
+  const hasSaasSide = !!model.hasSaasSide;
 
   const deployLabel = model.deployModel === "saas"
-    ? "SaaS"
-    : model.deployModel === "hybrid" ? "Hybrid SaaS + On-Prem" : "Self-managed";
+    ? "Fully Managed"
+    : model.deployModel === "hybrid" ? "Hybrid Fully Managed + Self Managed" : "Self Managed";
   const titleText = `${model.iaasLabel} · ${model.tierName} · ${deployLabel}`;
   const productText = model.products.length ? model.products.join(" · ") : "Platform baseline";
 
@@ -1546,7 +1567,9 @@ function architectureLayout(model) {
   // load balancer fronts that same hostname once it's resolved to a private IP. Square
   // brackets, not "<server>": these labels render as HTML (html=1) in the draw.io export,
   // where a literal "<" opens an (unknown, invisible) tag and silently eats the text.
-  const accessChainLabels = ["", "*.pe.jfrog.io", "[server].pe.jfrog.io", "[server].pe.jfrog.io"];
+  const accessChainLabels = hasSaasSide
+    ? ["", "*.pe.jfrog.io", "[server].pe.jfrog.io", "[server].pe.jfrog.io"]
+    : ["", "customer domain"];
   const publicRouteLabel = "public: [server].jfrog.io";
   // Custom domain (vanity URL, e.g. artifactory.acme.com) for the private endpoint: the
   // customer points it at their own load balancer instead of [server].pe.jfrog.io directly.
@@ -1559,6 +1582,11 @@ function architectureLayout(model) {
   // space nearby is already crossed by the public/cloud-native bypass lines above it.
   const privatePeLabel = "private (or custom domain): [server].pe.jfrog.io";
   const cloudMeta = model.connectivityMeta || DIAGRAM_META[model.connectivityProvider] || DIAGRAM_META.aws;
+  // model.connectivityProvider prefers a non-onprem provider (it exists to name the cloud
+  // side a PrivateLink/PSC connection attaches to), which is the wrong lens for self-managed:
+  // a fully on-prem self-managed customer has no cloud side, so their access band should
+  // describe their own on-prem LB/DNS, not fall back to an unrelated "aws" default.
+  const selfManagedMeta = DIAGRAM_META[(model.providers || [])[0]] || DIAGRAM_META[model.iaas] || DIAGRAM_META.aws;
   // iconKind looks up the real cloud-provider icon (CLOUD_ICON_DATA via cloudIconSvgMarkup /
   // cloudIconDrawioStyle) for model.connectivityProvider; null means a generic box only.
   // On-prem CI/CD clients reaching a cloud-hosted JFrog instance (privately or publicly)
@@ -1566,18 +1594,45 @@ function architectureLayout(model) {
   // includes an actual On-Prem JPS region — so this whole path is always drawn, not
   // gated behind model.hasOnPrem (that flag still legitimately gates the On-Prem JPS/JPD
   // box itself further down, since that one really does depend on what was bought).
-  const accessDefs = [
-    { title: "Internal clients", sub: "CI/CD · Security tools · Users", iconKind: null },
-    { title: "On-Prem ↔ Cloud", sub: cloudMeta.vpn, iconKind: "vpn" },
-    { title: "Corporate DNS", sub: "Conditional forwarder →", iconKind: "dns" },
-    // On-prem DNS servers can't resolve the cloud-side private hosted zone directly — the
-    // conditional forwarder above sends pe.jfrog.io queries across the VPN to this inbound
-    // resolver endpoint in the VPC/VNet, which then resolves them against the private zone.
-    // Cloud-native clients (already inside the VPC/VNet) skip this hop entirely.
-    { title: "DNS Resolver Endpoint", sub: cloudMeta.resolverInboundShort, iconKind: "dns" },
-    { title: "Load Balancer", sub: cloudMeta.lb, iconKind: "lb" },
+  // Self-managed has no JFrog Cloud side at all, so none of the PrivateLink/PSC chain
+  // (VPN into JFrog's VPC, conditional DNS forwarder, JFrog's inbound resolver endpoint,
+  // or a JFrog-operated router) applies. Per JFrog's own architecture docs, external
+  // clients reach a self-managed JPD through a customer-owned Layer 7 load balancer that
+  // talks straight to the Artifactory Router — nothing else sits in between. Clients are
+  // split into Datacenter (on-prem) and Cloud (hosted on a cloud IaaS account) so a
+  // self-managed customer on AWS/Azure/GCP isn't drawn as if they were on-prem.
+  // Always show both client populations — a self-managed customer can have datacenter
+  // (private network) clients, cloud-hosted clients, or both, regardless of which cloud/DC
+  // the JPS/JPD sites themselves happen to run on (mirrors the SaaS side's on-prem CI/CD
+  // path, which is likewise always drawn regardless of the purchased topology).
+  const smClientDefs = [
+    { title: "Datacenter clients", sub: "Private DC CI/CD · Security tools · Users" },
+    { title: "Cloud clients", sub: "Cloud-hosted CI/CD · Security tools · Users" },
   ];
-  const accessRowW = accessDefs.length * accessBoxW + (accessDefs.length - 1) * accessGapX;
+  const smClientGapY = 10;
+  const smStackH = smClientDefs.length * accessBoxH + (smClientDefs.length - 1) * smClientGapY;
+
+  const accessDefs = hasSaasSide
+    ? [
+      { title: "Internal clients", sub: "CI/CD · Security tools · Users", iconKind: null },
+      { title: "On-Prem ↔ Cloud", sub: cloudMeta.vpn, iconKind: "vpn" },
+      { title: "Corporate DNS", sub: "Conditional forwarder →", iconKind: "dns" },
+      // On-prem DNS servers can't resolve the cloud-side private hosted zone directly — the
+      // conditional forwarder above sends pe.jfrog.io queries across the VPN to this inbound
+      // resolver endpoint in the VPC/VNet, which then resolves them against the private zone.
+      // Cloud-native clients (already inside the VPC/VNet) skip this hop entirely.
+      { title: "DNS Resolver Endpoint", sub: cloudMeta.resolverInboundShort, iconKind: "dns" },
+      { title: "Load Balancer", sub: cloudMeta.lb, iconKind: "lb" },
+    ]
+    : null;
+  // Self-managed's access row is a 2×2 grid — Datacenter clients over Cloud clients on the
+  // left, VPN over Global Load Balancer on the right — so every connector in it is a plain
+  // horizontal/vertical line (same row or same column), never a diagonal. The Global LB
+  // fans out to each site's own regional LB one band down (with the grid) — there can be
+  // more than one regional LB (see smLbBoxW/smLbRowW below), so they don't live in this row.
+  const accessRowW = hasSaasSide
+    ? accessDefs.length * accessBoxW + (accessDefs.length - 1) * accessGapX
+    : accessBoxW * 2 + accessGapX;
 
   // Private Endpoint moves down to share a row with the JFrog-side DNS routing box (both
   // fan into the grid from the same height) rather than sitting up in the client chain —
@@ -1589,27 +1644,48 @@ function architectureLayout(model) {
   // This box's own width auto-grows to fit routeSub (see routeBoxMinW below), so it's the
   // one safe place in this band to add a longer caption — everywhere else here is already
   // crossed by the LB→route/LB→pf curves and the public/cloud-native bypass lines.
-  const routeSub = `Manual failover / geo-location · ${primaries.length + additionals.length} writable site(s) · excludes Private Endpoints (left) · to mirror privately, front with your own LB (SNI to whichever JPD is active — not auto-synced with this)`;
-  const peBoxW = 210;
-  const routeGapX = 16;
-  const routeBoxMinW = Math.ceil(textW(routeSub, 10)) + 48;
-  const routeBandW = Math.max(accessRowW, peBoxW + routeGapX + routeBoxMinW);
+  const routeSub = hasSaasSide
+    ? `Manual failover / geo-location · ${primaries.length + additionals.length} writable site(s) · excludes Private Endpoints (left) · to mirror privately, front with your own LB (SNI to whichever JPD is active — not auto-synced with this)`
+    : "";
+  const peBoxW = hasSaasSide ? 210 : 0;
+  const routeGapX = hasSaasSide ? 16 : 0;
+  // Self-managed has nothing to size this against (no routing box is drawn — see the
+  // laneTop/route-band collapse below), so its min-width doesn't need to grow to fit
+  // routeSub the way the SaaS routing box's caption does.
+  const routeBoxMinW = hasSaasSide ? Math.ceil(textW(routeSub, 10)) + 48 : 0;
+  // Self-managed: every writable site gets its own regional Load Balancer box (customers
+  // commonly run one per site/region, not a single shared one) — sized to fit that many
+  // boxes side by side in the same band the SaaS side uses for Private Endpoint + JFrog-side
+  // DNS routing, each with its own short direct drop into its own JPD/JPS below.
+  const smLbCount = primaries.length + additionals.length;
+  const smLbBoxW = 150;
+  const smLbGapX = 14;
+  const smLbRowW = smLbCount ? smLbCount * smLbBoxW + (smLbCount - 1) * smLbGapX : 0;
+  const routeBandW = Math.max(accessRowW, hasSaasSide ? (peBoxW + routeGapX + routeBoxMinW) : smLbRowW);
   const routeBoxW = routeBandW - peBoxW - routeGapX;
 
   const bandStartY = 56;
   const accessLabelH = 18;
   const accessBoxY = bandStartY + accessLabelH;
-  const accessBoxBottom = accessBoxY + accessBoxH;
+  // Self-managed's client column can stack 2 boxes (Datacenter + Cloud) taller than the
+  // single-row SaaS chain — the band's actual height follows whichever is taller.
+  const accessRowH = hasSaasSide ? accessBoxH : Math.max(accessBoxH, smStackH);
+  const accessBoxBottom = accessBoxY + accessRowH;
   const accessCaptionY = accessBoxBottom + 16;
   const accessBandBottom = accessCaptionY + 8;
 
-  // JFrog-side DNS routing band: the global router that steers traffic across writable
-  // sites by manual failover or geo-location — sits between the private endpoint and Primary.
+  // Routing band: the SaaS side's global JFrog-side router + Private Endpoint(s), or the
+  // self-managed side's one-regional-LB-per-site row — both sit between the client band and
+  // Primary, so this band is never collapsed to zero regardless of deploy model.
   const routeGap = 16;
   const routeLabelH = 20;
   const routeBoxH = 44;
+  // Self-managed's Global LB fans out through a horizontal bus that needs its own row
+  // between the band label and the Regional LB boxes — without this extra gap the bus
+  // sits only ~4px under the label, so its line clips straight into the label's text.
+  const smBusRowH = hasSaasSide ? 0 : 18;
   const routeBandY = accessBandBottom + routeGap;
-  const routeBoxY = routeBandY + routeLabelH;
+  const routeBoxY = routeBandY + routeLabelH + smBusRowH;
   const routeBoxBottom = routeBoxY + routeBoxH;
   const routeBandBottom = routeBoxBottom + 10;
 
@@ -1667,7 +1743,10 @@ function architectureLayout(model) {
     x: laneX(lane),
     y: laneTop,
     w: laneW,
-    h: H - laneTop - footerH,
+    // Stop above the *whole* footer band (footerH's base 2 lines plus extraFooterH's extra
+    // monitoring line) — footerH alone under-counts it, so the box crept down far enough to
+    // clip into the Monitoring line's ascenders sitting just above the footer.
+    h: H - laneTop - footerH - extraFooterH,
   }));
 
   const cells = [];
@@ -1687,7 +1766,7 @@ function architectureLayout(model) {
         let sub;
         if (row.key === "primary") {
           title = siteSaas ? `Primary JPD ${item.index}` : `Primary JPS ${item.index}`;
-          sub = `${provider} · ${item.region} · ${siteSaas ? "SaaS" : "On-Prem"}`;
+          sub = `${provider} · ${item.region} · ${siteSaas ? "Fully Managed" : "Self Managed"}`;
         } else if (row.key === "additional") {
           title = `Additional Instance ${item.index}`;
           sub = `${provider} · ${item.region} · writable`;
@@ -1699,6 +1778,9 @@ function architectureLayout(model) {
           id: `n${nodes.length + 1}`,
           rowKey: row.key,
           lane,
+          siteSaas,
+          iaas: item.iaas,
+          region: item.region,
           x: x + (laneW - boxW) / 2,
           y,
           w: boxW,
@@ -1733,7 +1815,15 @@ function architectureLayout(model) {
       sourceBottom: source.y + source.h,
       minX: Math.min(centerX(source), ...destinationXs),
       maxX: Math.max(centerX(source), ...destinationXs),
-      label: model.accessFederation ? "Access + Repository Federation" : "Repository Federation",
+      // Federation (bidirectional, near-real-time) requires the Federation entitlement;
+      // without it, multi-site sync is classic push/pull Repository Replication — JFrog's
+      // other documented mechanism for keeping multiple JPDs in sync — not Federation by
+      // default, so don't claim it unless the entitlement is actually there.
+      label: model.accessFederation
+        ? "Access + Repository Federation"
+        : model.repoFederation
+          ? "Repository Federation"
+          : "Repository Replication (push/pull)",
     };
   }
 
@@ -1759,28 +1849,81 @@ function architectureLayout(model) {
     };
   }
 
-  // Access nodes: client/network chain (clients → [VPN] → DNS → LB → Private Endpoint),
-  // left-aligned with the lane grid below it.
-  let accessCursorX = gridX;
-  const accessNodes = accessDefs.map((def, index) => {
-    const node = {
-      id: `ac${index + 1}`, x: accessCursorX, y: accessBoxY, w: accessBoxW, h: accessBoxH,
-      title: def.title, sub: def.sub, iconKind: def.iconKind,
-    };
-    accessCursorX += accessBoxW + accessGapX;
-    return node;
-  });
-  const accessConnectors = [];
-  for (let i = 0; i < accessNodes.length - 1; i++) {
-    const a = accessNodes[i];
-    const b = accessNodes[i + 1];
-    accessConnectors.push({ x1: a.x + a.w, y1: a.y + a.h / 2, x2: b.x, y2: b.y + b.h / 2, label: accessChainLabels[i] });
-  }
   // Real per-service cloud icons only exist for actual cloud providers (aws/azure/gcp);
-  // an on-prem-only connectivity provider falls back to plain labeled boxes.
-  const iconProvider = ["aws", "azure", "gcp"].includes(model.connectivityProvider)
-    ? model.connectivityProvider
+  // an on-prem-only provider falls back to plain labeled boxes. Self-managed uses the
+  // provider actually hosting the JPS(s) (selfManagedMeta's basis), not connectivityProvider
+  // (that one's biased toward naming a cloud side for PrivateLink, which self-managed has none of).
+  const iconProviderBasis = hasSaasSide ? model.connectivityProvider : (model.providers || [])[0];
+  const iconProvider = ["aws", "azure", "gcp"].includes(iconProviderBasis)
+    ? iconProviderBasis
     : null;
+
+  let accessNodes;
+  let accessConnectors;
+  if (hasSaasSide) {
+    // SaaS / hybrid: a single left-to-right chain (clients → [VPN] → DNS → LB → Private
+    // Endpoint), left-aligned with the lane grid below it.
+    let accessCursorX = gridX;
+    accessNodes = accessDefs.map((def, index) => {
+      const node = {
+        id: `ac${index + 1}`, x: accessCursorX, y: accessBoxY, w: accessBoxW, h: accessBoxH,
+        title: def.title, sub: def.sub, iconKind: def.iconKind,
+      };
+      accessCursorX += accessBoxW + accessGapX;
+      return node;
+    });
+    accessConnectors = [];
+    for (let i = 0; i < accessNodes.length - 1; i++) {
+      const a = accessNodes[i];
+      const b = accessNodes[i + 1];
+      accessConnectors.push({
+        x1: a.x + a.w, y1: a.y + a.h / 2, x2: b.x, y2: b.y + b.h / 2,
+        fromId: a.id, toId: b.id, label: accessChainLabels[i],
+      });
+    }
+  } else {
+    // Self-managed: a 2×2 grid — Datacenter clients over Cloud clients on the left, VPN
+    // over Global Load Balancer on the right — so every connector here is a plain
+    // horizontal/vertical line, never a diagonal: Datacenter clients → VPN (same row) →
+    // Global LB (same column, down); Cloud clients → Global LB directly (same row —
+    // already inside the same network as a cloud-hosted JPS, no VPN hop needed). The
+    // Global LB fans out to each site's own regional LB one band down (see smLbFan below).
+    const col1X = gridX;
+    const col2X = gridX + accessBoxW + accessGapX;
+    const row1Y = accessBoxY + (accessRowH - smStackH) / 2;
+    const row2Y = row1Y + accessBoxH + smClientGapY;
+    const datacenterClientNode = {
+      id: "ac1", x: col1X, y: row1Y, w: accessBoxW, h: accessBoxH,
+      title: smClientDefs[0].title, sub: smClientDefs[0].sub, iconKind: null,
+    };
+    const vpnNode = {
+      id: "acvpn", x: col2X, y: row1Y, w: accessBoxW, h: accessBoxH,
+      title: "Cloud ↔ Private DC VPN", sub: selfManagedMeta.vpn, iconKind: "vpn",
+    };
+    const cloudClientNode = {
+      id: "ac2", x: col1X, y: row2Y, w: accessBoxW, h: accessBoxH,
+      title: smClientDefs[1].title, sub: smClientDefs[1].sub, iconKind: null,
+    };
+    const globalLbNode = {
+      id: "acgloballb", x: col2X, y: row2Y, w: accessBoxW, h: accessBoxH,
+      title: "Global Load Balancer", sub: "GTM / DNS-based — routes to the right Regional LB", iconKind: "lb",
+    };
+    accessNodes = [datacenterClientNode, vpnNode, cloudClientNode, globalLbNode];
+    accessConnectors = [
+      {
+        x1: datacenterClientNode.x + datacenterClientNode.w, y1: datacenterClientNode.y + datacenterClientNode.h / 2,
+        x2: vpnNode.x, y2: vpnNode.y + vpnNode.h / 2, fromId: datacenterClientNode.id, toId: vpnNode.id, label: "", dir: "h",
+      },
+      {
+        x1: vpnNode.x + vpnNode.w / 2, y1: vpnNode.y + vpnNode.h,
+        x2: globalLbNode.x + globalLbNode.w / 2, y2: globalLbNode.y, fromId: vpnNode.id, toId: globalLbNode.id, label: "", dir: "v",
+      },
+      {
+        x1: cloudClientNode.x + cloudClientNode.w, y1: cloudClientNode.y + cloudClientNode.h / 2,
+        x2: globalLbNode.x, y2: globalLbNode.y + globalLbNode.h / 2, fromId: cloudClientNode.id, toId: globalLbNode.id, label: "", dir: "h",
+      },
+    ];
+  }
   const access = {
     labelY: bandStartY + 14,
     nodes: accessNodes,
@@ -1803,19 +1946,82 @@ function architectureLayout(model) {
   const peBoxX = gridX;
   const routeBoxX = gridX + peBoxW + routeGapX;
   const routeOutX = routeBoxX + routeBoxW / 2;
-  const primaryTargets = anchors.primary.map((a) => ({ x: centerX(a), y: a.y, id: a.id }));
+  // Private Endpoint / MyJFrog DNS routing only ever reach SaaS-kind sites (per JFrog's
+  // docs, both are Cloud-platform-only). In a hybrid topology that means the on-prem
+  // primaries/additionals are excluded from this fan-out even though they share the same
+  // row as their SaaS siblings; in a pure self-managed topology every site already is
+  // self-managed, so the (unfiltered) route band below draws to all of them instead.
+  // Self-managed no longer routes through this shared fan at all — see smLbFan below,
+  // where every site gets its own dedicated regional LB and its own direct drop instead.
+  const routePrimaryAnchors = hasSaasSide ? anchors.primary.filter((a) => a.siteSaas) : [];
+  const routeAdditionalAnchors = hasSaasSide ? anchors.additional.filter((a) => a.siteSaas) : [];
+  const primaryTargets = routePrimaryAnchors.map((a) => ({ x: centerX(a), y: a.y, id: a.id }));
   let additionalFan = null;
-  if (anchors.additional.length && additionalRow) {
+  if (routeAdditionalAnchors.length && additionalRow) {
     const sideX = gridX + gridW + 34;
     additionalFan = {
       sideX,
       busY: additionalRow.y - 12,
       fromY: routeBoxBottom,
-      targets: anchors.additional.map((a) => ({ x: centerX(a), y: a.y, id: a.id })),
+      targets: routeAdditionalAnchors.map((a) => ({ x: centerX(a), y: a.y, id: a.id })),
     };
     // The side channel can sit to the right of everything computed so far — widen the
     // canvas to fit it (lane positions are unaffected; they're already fixed at gridX).
     W = Math.max(W, sideX + pad);
+  }
+
+  // Self-managed: every writable site gets its own regional Load Balancer box, laid out
+  // left-to-right in this same band (see smLbBoxW/smLbRowW above), each with its own
+  // direct drop straight down into its own JPD/JPS — no shared bus, no JFrog-operated
+  // router in between (per JFrog's docs, MyJFrog DNS Routing excludes self-hosted JPDs).
+  let smLbFan = null;
+  if (!hasSaasSide) {
+    const lbTargets = [...anchors.primary, ...anchors.additional];
+    const typeSeen = { primary: 0, additional: 0 };
+    // Each box's own width grows to fit its title/sub (provider LB names + region can run
+    // long, e.g. "On-prem LB (F5 / HAProxy) · Primary DC") instead of a fixed width that
+    // silently overflows — mirrors routeBoxMinW's approach above for the SaaS routing box.
+    const lbIconSpace = 8 + 22 + 6;
+    let lbCursorX = gridX;
+    const lbNodes = lbTargets.map((target, index) => {
+      typeSeen[target.rowKey] += 1;
+      const providerMeta = DIAGRAM_META[target.iaas] || selfManagedMeta;
+      const title = `${target.rowKey === "primary" ? "Primary" : "Additional"} LB ${typeSeen[target.rowKey]}`;
+      const sub = `${providerMeta.lb} · ${target.region || ""}`;
+      const w = Math.max(smLbBoxW, Math.ceil(textW(title, 10)) + lbIconSpace + 10, Math.ceil(textW(sub, 8)) + lbIconSpace + 10);
+      const node = {
+        id: `smlb${index + 1}`,
+        x: lbCursorX,
+        y: routeBoxY,
+        w,
+        h: routeBoxH,
+        title,
+        sub,
+        targetX: centerX(target),
+        targetY: target.y,
+        targetId: target.id,
+      };
+      lbCursorX += w + smLbGapX;
+      return node;
+    });
+    // Real per-box widths can run wider than the smLbRowW estimate used to size the
+    // canvas earlier (that one only knew the count, not the actual provider/region text) —
+    // widen the canvas now if the laid-out row needs more room, same pattern as
+    // additionalFan's sideX widening below.
+    W = Math.max(W, lbCursorX - smLbGapX + pad);
+    // Fans out from the Global Load Balancer's own position (built in the access band
+    // above), not a bare client-column point — the Global LB is what actually decides
+    // which Regional LB(s) traffic goes to.
+    const globalLbNode = accessNodes.find((n) => n.id === "acgloballb");
+    smLbFan = {
+      labelY: routeBandY + 12,
+      busX: globalLbNode.x + globalLbNode.w / 2,
+      busFromY: globalLbNode.y + globalLbNode.h,
+      busY: routeBoxY - smBusRowH / 2,
+      nodes: lbNodes,
+      caption: "Global LB routes by active JPD(s); each JPD/JPS then talks to its own Regional LB, direct to its own Router — no MyJFrog DNS routing or Private Endpoints (SaaS-only).",
+      captionY: routeBoxBottom + 14,
+    };
   }
 
   // "Internal clients" covers three distinct connectivity scenarios, only one of which
@@ -1831,22 +2037,31 @@ function architectureLayout(model) {
   //    neither the VPN nor the on-prem DNS bridge, since the cloud's own default VPC/VNet
   //    resolver already answers the private hosted zone — they reach the endpoint directly.
   const clientsNode = accessNodes[0];
-  const clientBypass = {
+  // Both bypasses are ways of skipping part of the VPN/private-endpoint chain — neither
+  // means anything for self-managed, which has no such chain (and no JFrog DNS routing or
+  // Private Endpoint to bypass into).
+  const clientBypass = hasSaasSide ? {
     x: clientsNode.x + clientsNode.w / 2,
     fromY: accessBoxBottom,
     toY: routeBoxY,
     label: "public: via JFrog DNS routing",
-  };
-  const cloudNativeBypass = {
+  } : null;
+  const cloudNativeBypass = hasSaasSide ? {
     x: clientsNode.x + clientsNode.w / 2,
     fromY: accessBoxBottom,
     toX: peBoxX + peBoxW / 2,
     toY: routeBoxY,
     label: "cloud-native: same VPC, no VPN",
-  };
+  } : null;
 
+  // Self-managed has no separate routing box at all — per JFrog's docs there's no
+  // JFrog-operated router or MyJFrog DNS routing for self-hosted JPDs; its per-site
+  // regional LBs are drawn separately via smLbFan above. `route.hidden` tells the
+  // renderers to skip the box/label/inbound-curve entirely (primaryTargets/additionalFan
+  // are already empty for self-managed, so the generic fan-out below is a no-op).
   const route = {
     id: "route1",
+    hidden: !hasSaasSide,
     x: routeBoxX,
     y: routeBoxY,
     w: routeBoxW,
@@ -1863,45 +2078,50 @@ function architectureLayout(model) {
     primaryTargets,
     additionalFan,
     clientBypass,
-    inLabel: publicRouteLabel,
+    inLabel: hasSaasSide ? publicRouteLabel : null,
   };
 
   // Private Endpoint(s): one dedicated connection per writable site, wired directly — never
   // through the routing hub beside it. Short direct drops into Primary; Additional reached
-  // via its own short side channel just left of the grid.
-  const peOutX = peBoxX + peBoxW / 2;
-  // Best practice for a single custom domain fronting the private path (see privatePeLabel
-  // above): point its load balancer at whichever JPD is Primary right now, with the
-  // Additional instance as standby — the same active/passive pairing Manual Failover uses
-  // publicly, just mirrored on the customer's own LB. Only label it that way when the
-  // topology actually is a clean 2-JPD failover pair; with Geolocation or 3+ writable sites
-  // there's no single "the standby one," so we leave the fan-out unlabeled instead of
-  // asserting something misleading.
-  const peSingleFailoverPair = anchors.primary.length === 1 && anchors.additional.length === 1;
-  const peFan = {
-    id: "pe1",
-    x: peBoxX,
-    y: routeBoxY,
-    w: peBoxW,
-    h: routeBoxH,
-    title: "Private Endpoint(s)",
-    sub: `${cloudMeta.pl} · 1 per JPD`,
-    inFromX: lbNode.x + lbNode.w / 2,
-    inFromY: accessBoxBottom,
-    inToX: peOutX,
-    inToY: routeBoxY,
-    outX: peOutX,
-    outFromY: routeBoxBottom,
-    sideX: Math.max(pad + 6, peBoxX - 30),
-    primaryBusY: laneTop - 16,
-    primaryTargets: anchors.primary.map((a) => ({ x: centerX(a), y: a.y, id: a.id })),
-    additionalBusY: additionalRow ? additionalRow.y - 20 : null,
-    additionalTargets: anchors.additional.map((a) => ({ x: centerX(a), y: a.y, id: a.id })),
-    cloudNativeBypass,
-    inLabel: privatePeLabel,
-    activeLabel: peSingleFailoverPair ? "single custom domain → active" : null,
-    standbyLabel: peSingleFailoverPair ? "standby (manual failover)" : null,
-  };
+  // via its own short side channel just left of the grid. Self-managed has no JFrog Cloud
+  // side to attach a Private Endpoint to at all (PrivateLink/PSC is a SaaS-only feature),
+  // so this box is omitted entirely rather than drawn empty.
+  let peFan = null;
+  if (hasSaasSide) {
+    const peOutX = peBoxX + peBoxW / 2;
+    // Best practice for a single custom domain fronting the private path (see privatePeLabel
+    // above): point its load balancer at whichever JPD is Primary right now, with the
+    // Additional instance as standby — the same active/passive pairing Manual Failover uses
+    // publicly, just mirrored on the customer's own LB. Only label it that way when the
+    // topology actually is a clean 2-JPD failover pair; with Geolocation or 3+ writable sites
+    // there's no single "the standby one," so we leave the fan-out unlabeled instead of
+    // asserting something misleading.
+    const peSingleFailoverPair = routePrimaryAnchors.length === 1 && routeAdditionalAnchors.length === 1;
+    peFan = {
+      id: "pe1",
+      x: peBoxX,
+      y: routeBoxY,
+      w: peBoxW,
+      h: routeBoxH,
+      title: "Private Endpoint(s)",
+      sub: `${cloudMeta.pl} · 1 per JPD`,
+      inFromX: lbNode.x + lbNode.w / 2,
+      inFromY: accessBoxBottom,
+      inToX: peOutX,
+      inToY: routeBoxY,
+      outX: peOutX,
+      outFromY: routeBoxBottom,
+      sideX: Math.max(pad + 6, peBoxX - 30),
+      primaryBusY: laneTop - 16,
+      primaryTargets: routePrimaryAnchors.map((a) => ({ x: centerX(a), y: a.y, id: a.id })),
+      additionalBusY: additionalRow ? additionalRow.y - 20 : null,
+      additionalTargets: routeAdditionalAnchors.map((a) => ({ x: centerX(a), y: a.y, id: a.id })),
+      cloudNativeBypass,
+      inLabel: privatePeLabel,
+      activeLabel: peSingleFailoverPair ? "single custom domain → active" : null,
+      standbyLabel: peSingleFailoverPair ? "standby (manual failover)" : null,
+    };
+  }
 
   return {
     empty: false,
@@ -1920,6 +2140,9 @@ function architectureLayout(model) {
     access,
     route,
     peFan,
+    smLbFan,
+    hasSaasSide,
+    routeBandLabel: hasSaasSide ? "PRIVATE ENDPOINT · JFROG-SIDE ROUTING" : "REGIONAL LOAD BALANCERS (CUSTOMER-MANAGED)",
     titleText,
     productText,
     footerLeft,
@@ -1941,6 +2164,14 @@ function buildArchitectureSvg(model) {
     `<text x="${x}" y="${y}" fill="${options.fill || C.txt}" font-size="${options.size || 12}" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif"${options.weight ? ` font-weight="${options.weight}"` : ""}${options.anchor ? ` text-anchor="${options.anchor}"` : ""}>${esc(value)}</text>`;
   const RECT = (x, y, w, h, fill, stroke, rx = 8, dash = false) =>
     `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}" fill="${fill}" stroke="${stroke}" stroke-width="1"${dash ? ` stroke-dasharray="5 4"` : ""}/>`;
+  // Right-angled elbow (vertical → horizontal → vertical, jogging at the midpoint Y)
+  // instead of a diagonal bezier — every connector in the diagram uses this so none of
+  // them ever cross a box or each other at an angle. Reduces to a single straight
+  // vertical segment for free when x1 === x2 (e.g. a bypass that drops straight down).
+  const ELBOW = (x1, y1, x2, y2) => {
+    const midY = (y1 + y2) / 2;
+    return `M ${x1} ${y1} L ${x1} ${midY} L ${x2} ${midY} L ${x2} ${y2}`;
+  };
 
   if (layout.empty) {
     return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px;height:auto" xmlns="http://www.w3.org/2000/svg">
@@ -1988,28 +2219,32 @@ function buildArchitectureSvg(model) {
   background.push(T(pad, acc.captionY, acc.caption, { fill: C.muted, size: 10 }));
 
   // JFrog-side DNS routing band: private endpoint feeds the router, which fans into the grid.
+  // Self-managed has no such router (route.hidden) — only its fan-out into the grid is
+  // drawn below, originating from the Internal Load Balancer node in the access band.
   const route = layout.route;
-  background.push(T(pad, route.labelY, "PRIVATE ENDPOINT · JFROG-SIDE ROUTING", { fill: C.route, size: 10, weight: 600 }));
-  connectors.push(`<path d="M ${route.inFromX} ${route.inFromY} C ${route.inFromX} ${(route.inFromY + route.inToY) / 2}, ${route.inToX} ${(route.inFromY + route.inToY) / 2}, ${route.inToX} ${route.inToY}" fill="none" class="jfd-flow jfd-flow-net" stroke="${C.net}" stroke-width="1.4" marker-end="url(#geo-net)"/>`);
-  if (route.inLabel) {
-    connectors.push(T(route.inFromX + 10, (route.inFromY + route.inToY) / 2, route.inLabel, { fill: C.muted, size: 9 }));
+  background.push(T(pad, route.labelY, layout.routeBandLabel, { fill: C.route, size: 10, weight: 600 }));
+  if (!route.hidden) {
+    connectors.push(`<path d="${ELBOW(route.inFromX, route.inFromY, route.inToX, route.inToY)}" fill="none" class="jfd-flow jfd-flow-net" stroke="${C.net}" stroke-width="1.4" marker-end="url(#geo-net)"/>`);
+    if (route.inLabel) {
+      connectors.push(T(route.inFromX + 10, (route.inFromY + route.inToY) / 2, route.inLabel, { fill: C.muted, size: 9 }));
+    }
+    // Optional path: an on-prem client can skip the VPN + private-endpoint chain entirely
+    // and reach the public routing URL directly over the internet.
+    if (route.clientBypass) {
+      const cb = route.clientBypass;
+      connectors.push(`<path d="${ELBOW(cb.x, cb.fromY, cb.x, cb.toY)}" fill="none" class="jfd-flow jfd-flow-bypass" stroke="${C.muted}" stroke-width="1.2" marker-end="url(#geo-net)"/>`);
+      connectors.push(T(cb.x + 8, (cb.fromY + cb.toY) / 2, cb.label, { fill: C.muted, size: 9 }));
+    }
+    nodes.push(RECT(route.x, route.y, route.w, route.h, C.routeFill, C.route, 6)
+      + jfrogLogoSvgMarkup(route.x + 10, route.y + (route.h - 20) / 2, 20)
+      + T(route.x + route.w / 2, route.y + 18, route.title, { weight: 600, size: 12, anchor: "middle" })
+      + T(route.x + route.w / 2, route.y + 34, route.sub, { fill: C.muted, size: 10, anchor: "middle" }));
   }
-  // Optional path: an on-prem client can skip the VPN + private-endpoint chain entirely
-  // and reach the public routing URL directly over the internet.
-  if (route.clientBypass) {
-    const cb = route.clientBypass;
-    connectors.push(`<path d="M ${cb.x} ${cb.fromY} C ${cb.x} ${(cb.fromY + cb.toY) / 2}, ${cb.x} ${(cb.fromY + cb.toY) / 2}, ${cb.x} ${cb.toY}" fill="none" class="jfd-flow jfd-flow-bypass" stroke="${C.muted}" stroke-width="1.2" marker-end="url(#geo-net)"/>`);
-    connectors.push(T(cb.x + 8, (cb.fromY + cb.toY) / 2, cb.label, { fill: C.muted, size: 9 }));
-  }
-  nodes.push(RECT(route.x, route.y, route.w, route.h, C.routeFill, C.route, 6)
-    + jfrogLogoSvgMarkup(route.x + 10, route.y + (route.h - 20) / 2, 20)
-    + T(route.x + route.w / 2, route.y + 18, route.title, { weight: 600, size: 12, anchor: "middle" })
-    + T(route.x + route.w / 2, route.y + 34, route.sub, { fill: C.muted, size: 10, anchor: "middle" }));
   const routeFlow = `class="jfd-flow jfd-flow-route" stroke="${C.route}" stroke-width="1.6" marker-end="url(#geo-route)"`;
   const routeBus = `class="jfd-flow jfd-flow-route" stroke="${C.route}" stroke-width="1.6"`;
   // Direct drop into every Primary (immediately below, no obstruction).
   route.primaryTargets.forEach((t) => {
-    connectors.push(`<path d="M ${route.outX} ${route.outFromY} C ${route.outX} ${(route.outFromY + t.y) / 2}, ${t.x} ${(route.outFromY + t.y) / 2}, ${t.x} ${t.y}" fill="none" ${routeFlow}/>`);
+    connectors.push(`<path d="${ELBOW(route.outX, route.outFromY, t.x, t.y)}" fill="none" ${routeFlow}/>`);
   });
   // Additional instances sit a row lower — reach them via a side channel that routes
   // around the Primary row instead of drawing straight through it.
@@ -2028,7 +2263,7 @@ function buildArchitectureSvg(model) {
   // directly, never through the public DNS-routing box right beside it.
   const pf = layout.peFan;
   if (pf) {
-    connectors.push(`<path d="M ${pf.inFromX} ${pf.inFromY} C ${pf.inFromX} ${(pf.inFromY + pf.inToY) / 2}, ${pf.inToX} ${(pf.inFromY + pf.inToY) / 2}, ${pf.inToX} ${pf.inToY}" fill="none" class="jfd-flow jfd-flow-net" stroke="${C.net}" stroke-width="1.4" marker-end="url(#geo-net)"/>`);
+    connectors.push(`<path d="${ELBOW(pf.inFromX, pf.inFromY, pf.inToX, pf.inToY)}" fill="none" class="jfd-flow jfd-flow-net" stroke="${C.net}" stroke-width="1.4" marker-end="url(#geo-net)"/>`);
     if (pf.inLabel) {
       connectors.push(T(pf.inFromX - 10, (pf.inFromY + pf.inToY) / 2, pf.inLabel, { fill: C.muted, size: 9, anchor: "end" }));
     }
@@ -2037,7 +2272,7 @@ function buildArchitectureSvg(model) {
     // endpoint directly (the cloud's own default resolver already answers the private zone).
     if (pf.cloudNativeBypass) {
       const cnb = pf.cloudNativeBypass;
-      connectors.push(`<path d="M ${cnb.x} ${cnb.fromY} C ${cnb.x} ${(cnb.fromY + cnb.toY) / 2}, ${cnb.toX} ${(cnb.fromY + cnb.toY) / 2}, ${cnb.toX} ${cnb.toY}" fill="none" class="jfd-flow jfd-flow-bypass" stroke="${C.muted}" stroke-width="1.2" marker-end="url(#geo-net)"/>`);
+      connectors.push(`<path d="${ELBOW(cnb.x, cnb.fromY, cnb.toX, cnb.toY)}" fill="none" class="jfd-flow jfd-flow-bypass" stroke="${C.muted}" stroke-width="1.2" marker-end="url(#geo-net)"/>`);
       connectors.push(T(cnb.x - 8, (cnb.fromY + cnb.toY) / 2, cnb.label, { fill: C.muted, size: 9, anchor: "end" }));
     }
     const peIconSvg = cloudIconSvgMarkup(acc.iconProvider, "pe", pf.x + 10, pf.y + (pf.h - 24) / 2, 24);
@@ -2072,6 +2307,34 @@ function buildArchitectureSvg(model) {
         connectors.push(T((pf.sideX + busEndX2) / 2, pf.additionalBusY - 5, pf.standbyLabel, { fill: C.muted, size: 9, anchor: "middle" }));
       }
     }
+  }
+
+  // Self-managed regional Load Balancers: one box per writable site, each with its own
+  // direct drop into its own JPD/JPS — both client boxes share a single bus down into
+  // this row (no JFrog-operated router to fan out from, unlike the SaaS route/PE boxes).
+  const lbFan = layout.smLbFan;
+  if (lbFan) {
+    const lbNetLine = `class="jfd-flow jfd-flow-net" stroke="${C.net}" stroke-width="1.4"`;
+    connectors.push(`<line x1="${lbFan.busX}" y1="${lbFan.busFromY}" x2="${lbFan.busX}" y2="${lbFan.busY}" ${lbNetLine}/>`);
+    const lbXs = lbFan.nodes.map((n) => n.x + n.w / 2);
+    connectors.push(`<line x1="${Math.min(lbFan.busX, ...lbXs)}" y1="${lbFan.busY}" x2="${Math.max(lbFan.busX, ...lbXs)}" y2="${lbFan.busY}" ${lbNetLine}/>`);
+    const lbDrop = `class="jfd-flow jfd-flow-route" stroke="${C.route}" stroke-width="1.6" marker-end="url(#geo-route)"`;
+    // Right-angled elbow (down → across → down) at a shared jog level just above the
+    // grid, instead of a diagonal curve — keeps every drop legible even when a box's
+    // center drifts from its target's column (dynamic per-box widths, see smLbBoxW above).
+    const lbElbowY = layout.laneTop - 10;
+    lbFan.nodes.forEach((lb) => {
+      const cx = lb.x + lb.w / 2;
+      connectors.push(`<line x1="${cx}" y1="${lbFan.busY}" x2="${cx}" y2="${lb.y}" ${lbNetLine} marker-end="url(#geo-net)"/>`);
+      const lbIconSvg = cloudIconSvgMarkup(acc.iconProvider, "lb", lb.x + 8, lb.y + (lb.h - 22) / 2, 22);
+      const lbTextX = lb.x + (lbIconSvg ? 8 + 22 + 6 : 8);
+      nodes.push(RECT(lb.x, lb.y, lb.w, lb.h, C.routeFill, C.route, 6)
+        + (lbIconSvg || "")
+        + T(lbTextX, lb.y + 17, lb.title, { weight: 600, size: 10 })
+        + T(lbTextX, lb.y + 32, lb.sub, { fill: C.muted, size: 8 }));
+      connectors.push(`<path d="M ${cx} ${lb.y + lb.h} L ${cx} ${lbElbowY} L ${lb.targetX} ${lbElbowY} L ${lb.targetX} ${lb.targetY}" fill="none" ${lbDrop}/>`);
+    });
+    background.push(T(pad, lbFan.captionY, lbFan.caption, { fill: C.muted, size: 10 }));
   }
 
   // Geography columns: west is always left, unknown/central is middle, east is right.
@@ -2214,23 +2477,32 @@ function buildArchitectureDrawio(model) {
       cells.push(vertex(nextId(), "", iconStyle, node.x + ICON_PAD_DIO, node.y + (node.h - ICON_SIZE_DIO) / 2, ICON_SIZE_DIO, ICON_SIZE_DIO));
     }
   });
-  const netChainStyle = `html=1;endArrow=blockThin;endFill=1;strokeColor=${C.net};strokeWidth=1.4;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=9;fontColor=${C.muted};labelBackgroundColor=#ffffff;`;
-  for (let i = 0; i < acc.nodes.length - 1; i++) {
-    cells.push(connect(acc.connectors[i]?.label || "", netChainStyle, acc.nodes[i].id, acc.nodes[i + 1].id));
+  const netChainStyleH = `edgeStyle=orthogonalEdgeStyle;html=1;endArrow=blockThin;endFill=1;strokeColor=${C.net};strokeWidth=1.4;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=9;fontColor=${C.muted};labelBackgroundColor=#ffffff;`;
+  const netChainStyleV = `edgeStyle=orthogonalEdgeStyle;html=1;endArrow=blockThin;endFill=1;strokeColor=${C.net};strokeWidth=1.4;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=9;fontColor=${C.muted};labelBackgroundColor=#ffffff;`;
+  // Explicit fromId/toId (not positional acc.nodes[i]/[i+1]) — the self-managed access
+  // band is a 2×2 grid (clients left, VPN/Global LB right), not a strict left-to-right
+  // chain, so each connector picks its own exit/entry side via `dir` ("h" or "v").
+  for (const c of acc.connectors) {
+    cells.push(connect(c.label || "", c.dir === "v" ? netChainStyleV : netChainStyleH, c.fromId, c.toId));
   }
   cells.push(label(acc.caption, `align=left;verticalAlign=middle;fontSize=10;fontColor=${C.muted};`, layout.pad, acc.captionY - 12, layout.W - layout.pad * 2, 18));
 
   // JFrog-side DNS routing band: the Load Balancer feeds the public router (never the
   // Private Endpoint — see the layout comment on why those two paths stay separate).
+  // Self-managed has no such router (route.hidden) — the fan-out edges below source
+  // straight from the Internal Load Balancer node in the access band instead.
   const route = layout.route;
-  cells.push(label("PRIVATE ENDPOINT · JFROG-SIDE ROUTING", `align=left;verticalAlign=middle;fontSize=10;fontStyle=1;fontColor=${C.route};`, layout.pad, route.labelY - 12, 220, 18));
   const lbNode = acc.nodes.find((n) => n.iconKind === "lb") || acc.nodes[acc.nodes.length - 1];
-  cells.push(connect(route.inLabel || "", `html=1;endArrow=blockThin;endFill=1;strokeColor=${C.net};strokeWidth=1.4;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=9;fontColor=${C.muted};labelBackgroundColor=#ffffff;`, lbNode.id, route.id));
-  if (route.clientBypass) {
-    cells.push(connect("public: via JFrog DNS routing", `html=1;dashed=1;dashPattern=3 4;endArrow=blockThin;endFill=1;strokeColor=${C.muted};strokeWidth=1.2;fontColor=${C.muted};fontSize=9;edgeStyle=orthogonalEdgeStyle;exitX=0.5;exitY=1;entryX=0.15;entryY=0;`, acc.nodes[0].id, route.id));
+  const fanOutSourceId = route.hidden ? lbNode.id : route.id;
+  cells.push(label(layout.routeBandLabel, `align=left;verticalAlign=middle;fontSize=10;fontStyle=1;fontColor=${C.route};`, layout.pad, route.labelY - 12, 220, 18));
+  if (!route.hidden) {
+    cells.push(connect(route.inLabel || "", `edgeStyle=orthogonalEdgeStyle;html=1;endArrow=blockThin;endFill=1;strokeColor=${C.net};strokeWidth=1.4;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=9;fontColor=${C.muted};labelBackgroundColor=#ffffff;`, lbNode.id, route.id));
+    if (route.clientBypass) {
+      cells.push(connect("public: via JFrog DNS routing", `html=1;dashed=1;dashPattern=3 4;endArrow=blockThin;endFill=1;strokeColor=${C.muted};strokeWidth=1.2;fontColor=${C.muted};fontSize=9;edgeStyle=orthogonalEdgeStyle;exitX=0.5;exitY=1;entryX=0.15;entryY=0;`, acc.nodes[0].id, route.id));
+    }
+    cells.push(vertex(route.id, `<b>${esc(route.title)}</b><br><font color="${C.muted}">${esc(route.sub)}</font>`, DRAWIO_NODE_STYLE.route, route.x, route.y, route.w, route.h));
+    cells.push(vertex(nextId(), "", jfrogLogoDrawioStyle(), route.x + 10, route.y + (route.h - 20) / 2, 20, 20));
   }
-  cells.push(vertex(route.id, `<b>${esc(route.title)}</b><br><font color="${C.muted}">${esc(route.sub)}</font>`, DRAWIO_NODE_STYLE.route, route.x, route.y, route.w, route.h));
-  cells.push(vertex(nextId(), "", jfrogLogoDrawioStyle(), route.x + 10, route.y + (route.h - 20) / 2, 20, 20));
   // Real source->target edge to every Primary and Additional site — never a bare
   // source/target-less point edge (see the earlier Lucid-import fix for why).
   // Pushed to `deferredFanoutEdges`, not `cells`, directly: these edges run down into the
@@ -2238,13 +2510,13 @@ function buildArchitectureDrawio(model) {
   // (before the lanes) the lanes' opaque fill would paint straight over them, silently
   // hiding every fan-out arrow (and the labels on them) the moment it enters a lane.
   const deferredFanoutEdges = [];
-  const routeEdgeStyle = `html=1;dashed=1;dashPattern=6 4;endArrow=blockThin;endFill=1;strokeColor=${C.route};strokeWidth=1.6;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;`;
+  const routeEdgeStyle = `edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;dashPattern=6 4;endArrow=blockThin;endFill=1;strokeColor=${C.route};strokeWidth=1.6;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;`;
   route.primaryTargets.forEach((t) => {
-    deferredFanoutEdges.push(connect("", `${routeEdgeStyle}exitX=0.5;exitY=1;`, route.id, t.id));
+    deferredFanoutEdges.push(connect("", `${routeEdgeStyle}exitX=0.5;exitY=1;`, fanOutSourceId, t.id));
   });
   if (route.additionalFan) {
     route.additionalFan.targets.forEach((t) => {
-      deferredFanoutEdges.push(connect("", `${routeEdgeStyle}exitX=1;exitY=0.5;`, route.id, t.id));
+      deferredFanoutEdges.push(connect("", `${routeEdgeStyle}exitX=1;exitY=0.5;`, fanOutSourceId, t.id));
     });
   }
 
@@ -2253,7 +2525,7 @@ function buildArchitectureDrawio(model) {
   // site, wired directly, never through the routing box right beside it.
   const pf = layout.peFan;
   if (pf) {
-    cells.push(connect(pf.inLabel || "", `html=1;endArrow=blockThin;endFill=1;strokeColor=${C.net};strokeWidth=1.4;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=9;fontColor=${C.muted};labelBackgroundColor=#ffffff;`, lbNode.id, pf.id));
+    cells.push(connect(pf.inLabel || "", `edgeStyle=orthogonalEdgeStyle;html=1;endArrow=blockThin;endFill=1;strokeColor=${C.net};strokeWidth=1.4;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=9;fontColor=${C.muted};labelBackgroundColor=#ffffff;`, lbNode.id, pf.id));
     if (pf.cloudNativeBypass) {
       cells.push(connect("cloud-native: same VPC, no VPN", `html=1;dashed=1;dashPattern=3 4;endArrow=blockThin;endFill=1;strokeColor=${C.muted};strokeWidth=1.2;fontColor=${C.muted};fontSize=9;edgeStyle=orthogonalEdgeStyle;exitX=0.5;exitY=1;entryX=0.85;entryY=0;`, acc.nodes[0].id, pf.id));
     }
@@ -2273,6 +2545,31 @@ function buildArchitectureDrawio(model) {
     pf.additionalTargets.forEach((t) => {
       deferredFanoutEdges.push(connect(pf.standbyLabel || "", peEdgeStyleAdditional, pf.id, t.id));
     });
+  }
+
+  // Self-managed regional Load Balancers: one box per writable site, each fed by both
+  // client boxes and each with its own direct drop into its own JPD/JPS (mirrors the
+  // SVG's smLbFan bus-and-drop presentation — see the layout comment on why self-managed
+  // gets N dedicated LBs instead of the SaaS side's single shared router/PE pair).
+  const lbFan = layout.smLbFan;
+  if (lbFan) {
+    // Only the Global Load Balancer feeds the Regional LBs — not every access-band node —
+    // since it's the one that decides which Regional LB(s) traffic actually goes to.
+    const globalLbNode = acc.nodes.find((n) => n.id === "acgloballb");
+    const lbBusStyle = `html=1;endArrow=none;strokeColor=${C.net};strokeWidth=1.4;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;edgeStyle=orthogonalEdgeStyle;`;
+    const lbIconStyle = acc.iconProvider ? cloudIconDrawioStyle(acc.iconProvider, "lb") : null;
+    const lbBoxStyle = lbIconStyle ? DRAWIO_NODE_STYLE.route.replace("align=center", "align=left;spacingLeft=40") : DRAWIO_NODE_STYLE.route;
+    const lbDropStyle = `html=1;dashed=1;dashPattern=6 4;endArrow=blockThin;endFill=1;strokeColor=${C.route};strokeWidth=1.6;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;edgeStyle=orthogonalEdgeStyle;`;
+    lbFan.nodes.forEach((lb) => {
+      if (globalLbNode) cells.push(connect("", lbBusStyle, globalLbNode.id, lb.id));
+      const lbValue = `<b>${esc(lb.title)}</b><br><font color="${C.muted}">${esc(lb.sub)}</font>`;
+      cells.push(vertex(lb.id, lbValue, lbBoxStyle, lb.x, lb.y, lb.w, lb.h));
+      if (lbIconStyle) {
+        cells.push(vertex(nextId(), "", lbIconStyle, lb.x + 8, lb.y + (lb.h - 22) / 2, 22, 22));
+      }
+      deferredFanoutEdges.push(connect("", lbDropStyle, lb.id, lb.targetId));
+    });
+    cells.push(label(lbFan.caption, `align=left;verticalAlign=middle;fontSize=10;fontColor=${C.muted};`, layout.pad, lbFan.captionY - 12, layout.W - layout.pad * 2, 18));
   }
 
   layout.lanes.forEach((lane) => {
@@ -2334,8 +2631,8 @@ function buildArchitectureDrawio(model) {
     ["Primary JPD / JPS", C.accent, C.primaryFill],
     ["Additional Platform Instance", C.info, C.additionalFill],
     ["Edge (self-managed / Cloud)", C.warn, C.edgeFill],
-    ["Client / network access (DNS, LB, Private Endpoint)", C.net, C.netFill],
-    ["JFrog-side DNS routing", C.route, C.routeFill],
+    [layout.hasSaasSide ? "Client / network access (DNS, LB, Private Endpoint)" : "Client / network access (Datacenter + Cloud clients)", C.net, C.netFill],
+    [layout.hasSaasSide ? "JFrog-side DNS routing" : "Regional Load Balancers (customer-managed)", C.route, C.routeFill],
   ];
   legend.forEach(([text, stroke, fill], index) => {
     const x = layout.pad + index * 230;
@@ -2604,18 +2901,18 @@ function render(result) {
   const iaasCardLabel = iaasSummaryLabel(result.input.regions, input.iaas);
 
   const deployLabel = input.deployModel === "saas"
-    ? "SaaS"
+    ? "Fully Managed"
     : input.deployModel === "selfmanaged"
-      ? "Self-managed"
-      : "Hybrid (SaaS + On-Prem)";
+      ? "Self Managed"
+      : "Hybrid (Fully Managed + Self Managed)";
   const capacityCard = input.deployModel === "hybrid"
     ? `<div class="stat-card">
-        <div class="label">SaaS tenants</div>
+        <div class="label">Fully Managed tenants</div>
         <div class="value">${result.writableSites}</div>
         <div class="sub">primary ${result.saasPlatformQty || input.quantity} + add'l ${result.additionalInstances || 0}</div>
       </div>
       <div class="stat-card">
-        <div class="label">On-Prem servers</div>
+        <div class="label">Self Managed servers</div>
         <div class="value">${result.serversTotal ?? "—"}</div>
         <div class="sub">packs ${result.selfManagedPlatformQty || 1} · base ${result.serversIncluded ?? "—"} + add'l ${result.additionalServers || 0}</div>
       </div>`
@@ -2634,7 +2931,7 @@ function render(result) {
       <div class="stat-card">
         <div class="label">Platform</div>
         <div class="value" style="font-size:16px">${esc(tier.name)}</div>
-        <div class="sub">${deployLabel} · qty ${input.deployModel === "hybrid" ? `SaaS ${result.saasPlatformQty || 1} / On-Prem ${result.selfManagedPlatformQty || 1}` : input.quantity}</div>
+        <div class="sub">${deployLabel} · qty ${input.deployModel === "hybrid" ? `Fully Managed ${result.saasPlatformQty || 1} / Self Managed ${result.selfManagedPlatformQty || 1}` : input.quantity}</div>
       </div>
       ${capacityCard}
       <div class="stat-card">
@@ -2663,7 +2960,7 @@ function render(result) {
 
     <div class="result-block">
       <h3>Architecture diagram</h3>
-      <p class="muted" style="margin:0 0 8px">Geography grid: <strong>West ← Central → East → Other</strong>. Empty geography columns are hidden. On-Prem DC names and deployments with no region go to <strong>OTHER</strong> (not Central). The top overview band always shows on-prem CI/CD client connectivity (VPN, conditional DNS forwarder, resolver endpoint, load balancer) plus cloud-native and public bypass paths — regardless of whether the order includes an actual On-Prem JPS region — and Private Endpoint / JFrog-side DNS routing (manual failover / geo-location) in front of the writable-site grid; the footer calls out auth and monitoring for this configuration.</p>
+      <p class="muted" style="margin:0 0 8px">Geography grid: <strong>West ← Central → East → Other</strong>. Empty geography columns are hidden. On-Prem DC names and deployments with no region go to <strong>OTHER</strong> (not Central). The top overview band always shows on-prem CI/CD client connectivity (VPN, conditional DNS forwarder, resolver endpoint, load balancer) plus cloud-native and public bypass paths — regardless of whether the order includes an actual Self Managed JPS region — and Private Endpoint / JFrog-side DNS routing (manual failover / geo-location) in front of the writable-site grid; the footer calls out auth and monitoring for this configuration.</p>
       <div class="diagram-wrap">${diagramSvg}</div>
       <div class="diagram-legend">
         <span class="lg-net">Client / network access (VPN · DNS · LB · Private Endpoint)</span>
@@ -2781,15 +3078,15 @@ function syncAddonAvailability() {
   const tier = PLATFORM[platform];
   if (deployHint && tier) {
     if (tier.model === "saas") {
-      deployHint.textContent = "Pro is SaaS-only.";
+      deployHint.textContent = "Pro is Fully Managed only.";
       const saas = document.querySelector('input[name="deployModel"][value="saas"]');
       if (saas) saas.checked = true;
     } else if (tier.model === "selfmanaged") {
-      deployHint.textContent = "Pro X is self-managed only.";
+      deployHint.textContent = "Pro X is Self Managed only.";
       const sm = document.querySelector('input[name="deployModel"][value="selfmanaged"]');
       if (sm) sm.checked = true;
     } else {
-      deployHint.textContent = "Enterprise X / Enterprise +: SaaS, On-Prem, or both (hybrid). Cloud SKU = SaaS; Enterprise+ MP (no Cloud) = On-Prem.";
+      deployHint.textContent = "Enterprise X / Enterprise +: Fully Managed, Self Managed, or both (hybrid). Cloud SKU = Fully Managed; Enterprise+ MP (no Cloud) = Self Managed.";
     }
   }
 
@@ -2831,8 +3128,8 @@ function addRegionRow(preset = {}) {
     <div class="region-field f-site">
       <label>Site</label>
       <select class="region-site-kind">
-        <option value="saas"${siteKind === "saas" ? " selected" : ""}>SaaS JPD</option>
-        <option value="selfmanaged"${siteKind === "selfmanaged" ? " selected" : ""}>On-Prem JPS</option>
+        <option value="saas"${siteKind === "saas" ? " selected" : ""}>Fully Managed</option>
+        <option value="selfmanaged"${siteKind === "selfmanaged" ? " selected" : ""}>Self Managed</option>
       </select>
     </div>
     <div class="region-field f-region">
@@ -2919,7 +3216,7 @@ function loadExample() {
   $("saasUnits").value = "6760";
   $("saasUnitSizeGB").value = "1000";
   $("securitySeats").value = "0";
-  $("orderNotes").value = "Hybrid: Cloud Enterprise+ SaaS on GCP + Enterprise+ MP On-Prem on Azure · Additional Platform Instance ×1 · Edge ×2.";
+  $("orderNotes").value = "Hybrid: Cloud Enterprise+ Fully Managed on GCP + Enterprise+ MP Self Managed on Azure · Additional Platform Instance ×1 · Edge ×2.";
   syncAddonAvailability();
   document.querySelectorAll("[data-addon]").forEach((row) => {
     const id = row.getAttribute("data-addon");
@@ -3765,7 +4062,7 @@ function renderSfParseReport(report) {
   return `
     <div class="result-block">
       <h3>Salesforce paste map</h3>
-      ${report.hybrid ? `<div class="banner ok"><strong>Hybrid:</strong> Cloud (SaaS) ×${esc(String(report.saasPlatformQty || 1))} and On-Prem MP ×${esc(String(report.selfManagedPlatformQty || 1))} both present on the order.</div>` : ""}
+      ${report.hybrid ? `<div class="banner ok"><strong>Hybrid:</strong> Cloud (Fully Managed) ×${esc(String(report.saasPlatformQty || 1))} and Self Managed MP ×${esc(String(report.selfManagedPlatformQty || 1))} both present on the order.</div>` : ""}
       ${report.dedicated ? `<div class="banner ok"><strong>Dedicated:</strong> JFrog Dedicated / Dedicated Server noted on the order.</div>` : ""}
       ${report.consumptionTb ? `<p class="muted" style="margin:0 0 8px">Consumption totaled <strong>${esc(String(report.consumptionTb))} TB</strong> → SaaSInstance units (1000 GB/unit).</p>` : ""}
       ${matchedHtml ? `<p style="margin:0 0 4px"><strong>Matched</strong></p><ul class="compact">${matchedHtml}</ul>` : ""}
