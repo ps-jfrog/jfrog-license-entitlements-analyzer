@@ -117,17 +117,18 @@ function requiredNumber(text, regex, label) {
   return number;
 }
 
-function parseThresholds(source) {
+// jfrog.com/pricing/ sits behind AWS WAF Bot Control, which serves this JS
+// challenge page (200 OK, no useful content) to IP ranges it doesn't trust,
+// including GitHub Actions runners. It's not a structural change to detect
+// and hard-fail on — fall back to the last verified pricing-derived values.
+function isBotChallengePage(text) {
+  return text.length < 10_000 && /AwsWafIntegration|window\.gokuProps/i.test(text);
+}
+
+function parseThresholds(source, previousThresholds) {
   const projectsText = source.projects.text;
   const featureText = source.featureMatrix.text;
   const pricingText = source.pricing.text;
-  const consumptionValues = [...pricingText.matchAll(/(\d+)\s*GB Base Consumption/gi)]
-    .map((match) => Number(match[1]))
-    .filter((value, index, values) => Number.isFinite(value) && values.indexOf(value) === index)
-    .sort((a, b) => a - b);
-  if (consumptionValues.length < 2) {
-    throw new Error(`Expected at least two SaaS base consumption values, found ${consumptionValues.join(", ") || "none"}`);
-  }
 
   const projects = {
     pro: requiredNumber(projectsText, /Pro\/X subscription[^]*?Up to\s+(\d+)\s+projects/i, "Pro/X projects"),
@@ -148,6 +149,28 @@ function parseThresholds(source) {
   };
   if (Object.values(servers).some((value) => !Number.isFinite(value))) {
     throw new Error(`Invalid Artifactory server thresholds: ${JSON.stringify(serverRow)}`);
+  }
+
+  if (isBotChallengePage(pricingText)) {
+    if (!previousThresholds?.saasBaseConsumptionGB || !previousThresholds?.advancedSecurityBaseContributingDevelopers) {
+      throw new Error("pricing: got an AWS WAF bot-challenge page and no previously verified pricing data exists to fall back to");
+    }
+    return {
+      projects,
+      selfManagedArtifactoryServers: servers,
+      saasBaseConsumptionGB: previousThresholds.saasBaseConsumptionGB,
+      advancedSecurityBaseContributingDevelopers: previousThresholds.advancedSecurityBaseContributingDevelopers,
+      contributingDeveloperWindowDays: previousThresholds.contributingDeveloperWindowDays,
+      pricingBlocked: true,
+    };
+  }
+
+  const consumptionValues = [...pricingText.matchAll(/(\d+)\s*GB Base Consumption/gi)]
+    .map((match) => Number(match[1]))
+    .filter((value, index, values) => Number.isFinite(value) && values.indexOf(value) === index)
+    .sort((a, b) => a - b);
+  if (consumptionValues.length < 2) {
+    throw new Error(`Expected at least two SaaS base consumption values, found ${consumptionValues.join(", ") || "none"}`);
   }
 
   return {
@@ -184,6 +207,15 @@ function detectConflicts(productMatrix, sources) {
 }
 
 async function main() {
+  let existing = null;
+  try {
+    existing = JSON.parse(await readFile(OUT_JSON, "utf8"));
+  } catch (error) {
+    if (error?.code !== "ENOENT") {
+      console.warn(`Existing dataset could not be read and will be replaced: ${error.message}`);
+    }
+  }
+
   const fetched = await Promise.all(
     Object.entries(SOURCES).map(([name, url]) => fetchSource(name, url))
   );
@@ -191,15 +223,34 @@ async function main() {
 
   const productMatrix = parseProductMatrix(source.productMatrix.text);
   const selfManagedFeatureMatrix = parseSelfManagedFeatureMatrix(source.featureMatrix.text);
-  const thresholds = parseThresholds(source);
+  const thresholds = parseThresholds(source, existing?.thresholds);
   const conflicts = detectConflicts(productMatrix, source);
+
+  const pricingBlocked = Boolean(thresholds.pricingBlocked);
+  delete thresholds.pricingBlocked;
+  if (pricingBlocked) {
+    conflicts.push({
+      id: "pricing-source-blocked",
+      severity: "review_required",
+      tiers: [],
+      message: `jfrog.com/pricing/ returned an AWS WAF bot-challenge page instead of content this run. SaaS base consumption, contributing developer, and window-day thresholds are carried over from the value last verified at ${existing.sources.pricing.fetchedAt}; re-run once the block clears to reverify.`,
+      sources: ["pricing"],
+    });
+  }
 
   const generatedAt = new Date().toISOString();
   const data = {
     schemaVersion: 1,
     generatedAt,
     status: conflicts.length ? "review_required" : "verified",
-    sources: Object.fromEntries(fetched.map((item) => [item.name, {
+    sources: Object.fromEntries(fetched.map((item) => [item.name, item.name === "pricing" && pricingBlocked ? {
+      url: item.url,
+      updatedAt: existing.sources.pricing.updatedAt,
+      fetchedAt: existing.sources.pricing.fetchedAt,
+      sha256: existing.sources.pricing.sha256,
+      contentType: existing.sources.pricing.contentType,
+      blocked: true,
+    } : {
       url: item.url,
       updatedAt: item.updatedAt,
       fetchedAt: generatedAt,
@@ -218,8 +269,7 @@ async function main() {
   };
 
   await mkdir(dirname(OUT_JSON), { recursive: true });
-  try {
-    const existing = JSON.parse(await readFile(OUT_JSON, "utf8"));
+  if (existing) {
     const comparable = (value) => {
       const copy = structuredClone(value);
       delete copy.generatedAt;
@@ -232,10 +282,6 @@ async function main() {
       console.log(`Checked ${fetched.length} official sources; no published license data changed.`);
       console.log(`Status remains: ${existing.status}; dataset generated: ${existing.generatedAt}`);
       return;
-    }
-  } catch (error) {
-    if (error?.code !== "ENOENT") {
-      console.warn(`Existing dataset could not be compared and will be replaced: ${error.message}`);
     }
   }
 
