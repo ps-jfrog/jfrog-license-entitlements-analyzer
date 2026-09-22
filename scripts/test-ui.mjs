@@ -402,4 +402,26 @@ window.addRegionRow({ iaas: "onprem", siteKind: "selfmanaged", region: "Primary 
 $("btnAnalyze").click();
 assertRightAngledOnly(window.__lastDiagramSvg || "", "self-managed multi-site");
 
+// mTLS private-access variant: swaps LB for Private DNS zone and labels TLS+mTLS on JFrog.
+$("regionList").innerHTML = "";
+window.document.querySelector('input[name="deployModel"][value="saas"]').checked = true;
+window.document.querySelector('input[name="privateAccess"][value="mtls"]').checked = true;
+window.addRegionRow({ iaas: "azure", siteKind: "saas", region: "eastus", primary: 1 });
+window.addRegionRow({ iaas: "azure", siteKind: "saas", region: "westus2", additional: 1 });
+window.addRegionRow({ iaas: "onprem", siteKind: "selfmanaged", region: "Primary DC", primary: 0, edge: 0 });
+$("btnAnalyze").click();
+const mtlsSvg = window.__lastDiagramSvg || "";
+const mtlsDrawio = window.__lastDiagramDrawio || "";
+assert(/mTLS private access/.test(mtlsSvg), "mTLS diagram title suffix missing");
+assert(/Private DNS zone/.test(mtlsSvg), "mTLS diagram must show Private DNS zone instead of Load Balancer");
+assert(!/Load Balancer/.test(mtlsSvg), "mTLS diagram must not show a Load Balancer in the access band");
+assert(/pass-through TCP 443/.test(mtlsSvg), "mTLS Private Endpoint pass-through label missing");
+assert(/client cert \(PKI\)/.test(mtlsSvg), "mTLS client cert callout missing on Internal clients");
+assert(/mTLS \(Platform\)/.test(mtlsSvg), "mTLS auth caption missing from diagram footer band");
+assert(/TLS \+ mTLS/.test(mtlsSvg), "TLS + mTLS termination label missing on PE fan-out");
+assert(/Private DNS zone/.test(mtlsDrawio), "mTLS draw.io export must include Private DNS zone");
+assert(!/Load Balancer/.test(mtlsDrawio), "mTLS draw.io export must not include Load Balancer");
+assertRightAngledOnly(mtlsSvg, "mtls saas dual-jpd");
+window.document.querySelector('input[name="privateAccess"][value="standard"]').checked = true;
+
 console.log("UI smoke tests passed.");

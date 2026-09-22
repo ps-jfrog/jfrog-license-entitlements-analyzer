@@ -562,6 +562,7 @@ function collectInputs() {
   const deployModel = document.querySelector('input[name="deployModel"]:checked')?.value || "saas";
   const iaas = document.querySelector('input[name="iaas"]:checked')?.value || "aws";
   const edgeOps = document.querySelector('input[name="edgeOps"]:checked')?.value || "selfmanaged";
+  const privateAccess = document.querySelector('input[name="privateAccess"]:checked')?.value || "standard";
   const quantity = parseNum($("platformQty"), 1);
   const saasPlatformQty = parseNum($("saasPlatformQty"), Math.max(1, quantity));
   const selfManagedPlatformQty = parseNum($("selfManagedPlatformQty"), 1);
@@ -591,6 +592,7 @@ function collectInputs() {
     deployModel,
     iaas,
     edgeOps,
+    privateAccess,
     quantity: deployModel === "hybrid" ? saasPlatformQty : quantity,
     saasPlatformQty: deployModel === "hybrid" ? saasPlatformQty : (deployModel === "saas" ? quantity : 0),
     selfManagedPlatformQty: deployModel === "hybrid" ? selfManagedPlatformQty : (deployModel === "selfmanaged" ? quantity : 0),
@@ -1032,6 +1034,10 @@ function buildDiagramModel(input, ctx) {
     : input.deployModel === "hybrid"
       ? "Auth — Fully Managed side: SSO (SAML / OIDC) + SCIM for users, Access Tokens / OIDC for CI/CD · Self Managed side: platform SSO (Ent X+) + Access Tokens"
       : "Self Managed auth — Users: platform SSO (SAML / OIDC / SCIM, Ent X+) · CI/CD: Access Tokens / OIDC";
+  const mtlsMode = input.privateAccess === "mtls" && hasSaasSide;
+  const authNoteWithMtls = mtlsMode
+    ? `${authNote} · mTLS (Platform): share client CA with JFrog Support · Optional → Enforced on every JPD · additive to tokens/SSO · not on MyJFrog`
+    : authNote;
 
   const cloudMonitorNames = [...new Set(providers.filter((p) => p !== "onprem").map((p) => (DIAGRAM_META[p] || DIAGRAM_META.aws).monitor))].join(" / ");
   const monitoringBits = [];
@@ -1072,7 +1078,8 @@ function buildDiagramModel(input, ctx) {
     hasSelfManagedSide,
     connectivityProvider,
     connectivityMeta,
-    authNote,
+    authNote: authNoteWithMtls,
+    mtlsMode,
     monitoringNote,
   };
 }
@@ -1132,10 +1139,17 @@ function buildNextSteps(input, tier, ctx) {
       title: "Wire corporate DNS + load balancer to *.pe.jfrog.io",
       detail: `Point internal DNS (${connectivityMeta.dns}) and the load balancer (${connectivityMeta.lb}) at the private endpoint so CI/CD, security tooling, and users resolve <server>.pe.jfrog.io internally — do this before disabling public access, and confirm it resolves from every client network (VPN-connected included).`,
     });
-    steps.push({
-      title: "Optional: custom domain on the load balancer",
-      detail: `To front the private endpoint with a customer-owned domain (e.g. artifactory.acme.com) instead of exposing <server>.pe.jfrog.io to users, point that domain at the ${connectivityMeta.lb} rather than at the endpoint directly. TLS has to work one of two ways: the load balancer passes it through untouched by SNI (so <server>.pe.jfrog.io — what JFrog's certificate is actually issued for — is still what's being matched), or the load balancer terminates the custom domain's own certificate and re-encrypts on to the endpoint. Either way its backend pool target doesn't change: the private endpoint's private IP — the custom domain itself is never publicly resolvable.`,
-    });
+    if (input.privateAccess === "mtls") {
+      steps.push({
+        title: "mTLS + custom internal domain (no LB on Private Endpoint)",
+        detail: "For mTLS, do not put Application Gateway / ALB / NLB in front of the Private Endpoint — TLS and client-cert verification terminate on JFrog SaaS. Point a customer-owned internal zone (e.g. jfrog.custom.internal.acme.com) at cloud Private DNS A-records for each PE IP. Share the client CA PEM with JFrog Support and enable mTLS Optional on every JPD before Enforced. Issue client certs to CI/CD agents (Key Vault / PKI). mTLS is additive — tokens / SAML / OIDC still required — and does not apply to MyJFrog.",
+      });
+    } else {
+      steps.push({
+        title: "Optional: custom domain on the load balancer",
+        detail: `To front the private endpoint with a customer-owned domain (e.g. artifactory.acme.com) instead of exposing <server>.pe.jfrog.io to users, point that domain at the ${connectivityMeta.lb} rather than at the endpoint directly. TLS has to work one of two ways: the load balancer passes it through untouched by SNI (so <server>.pe.jfrog.io — what JFrog's certificate is actually issued for — is still what's being matched), or the load balancer terminates the custom domain's own certificate and re-encrypts on to the endpoint. Either way its backend pool target doesn't change: the private endpoint's private IP — the custom domain itself is never publicly resolvable.`,
+      });
+    }
   }
 
   if (hasOnPremRegion) {
@@ -1144,9 +1158,15 @@ function buildNextSteps(input, tier, ctx) {
       detail: `Stand up ${connectivityMeta.vpn} between the on-prem network and the cloud VPC/VNet hosting the private endpoint before attempting private connectivity — without it, on-prem clients cannot reach ${connectivityMeta.pl} at all, private or public DNS aside.`,
     });
     if (needsPrivateEndpoint) {
+      const forwardZone = input.privateAccess === "mtls"
+        ? "custom.internal.domain (your internal JFrog zone)"
+        : "pe.jfrog.io (or the specific <server>.pe.jfrog.io name)";
+      const nslookupName = input.privateAccess === "mtls"
+        ? "jfrog.custom.internal.acme.com"
+        : "<server>.pe.jfrog.io";
       steps.push({
         title: "Configure the conditional DNS forwarder (on-prem)",
-        detail: `On-prem DNS servers can't resolve the cloud-side private hosted zone directly. ${connectivityMeta.resolverConfig} Then, on the on-prem DNS server (Windows DNS, BIND, Infoblox, etc.), add a conditional forwarder for the zone \`pe.jfrog.io\` (or the specific \`<server>.pe.jfrog.io\` name) pointing at that endpoint's IP(s) — so on-prem clients get the private IP for that zone while every other query still resolves normally. Test with \`nslookup <server>.pe.jfrog.io\` from an on-prem host before cutover; it must return the private IP, not the public one.`,
+        detail: `On-prem DNS servers can't resolve the cloud-side private hosted zone directly. ${connectivityMeta.resolverConfig} Then, on the on-prem DNS server (Windows DNS, BIND, Infoblox, etc.), add a conditional forwarder for the zone ${forwardZone} pointing at that endpoint's IP(s) — so on-prem clients get the private IP for that zone while every other query still resolves normally. Test with nslookup ${nslookupName} from an on-prem host before cutover; it must return the private IP, not the public one.`,
       });
     }
   }
@@ -1509,6 +1529,7 @@ function architectureLayout(model) {
   const additionals = model.additionals || [];
   const edgeNodes = model.edgeNodes || [];
   const edgeSelfManaged = (model.edgeOps || "selfmanaged") === "selfmanaged";
+  const mtlsMode = !!model.mtlsMode;
   // PrivateLink/PSC and MyJFrog DNS Routing are JFrog Cloud (SaaS) features — per JFrog's
   // own docs, DNS Routing in MyJFrog explicitly excludes self-hosted JPDs, and
   // PrivateLink/Private Service Connect only exists for the SaaS platform. A pure
@@ -1519,7 +1540,7 @@ function architectureLayout(model) {
   const deployLabel = model.deployModel === "saas"
     ? "Fully Managed"
     : model.deployModel === "hybrid" ? "Hybrid Fully Managed + Self Managed" : "Self Managed";
-  const titleText = `${model.iaasLabel} · ${model.tierName} · ${deployLabel}`;
+  const titleText = `${model.iaasLabel} · ${model.tierName} · ${deployLabel}${mtlsMode ? " · mTLS private access" : ""}`;
   const productText = model.products.length ? model.products.join(" · ") : "Platform baseline";
 
   const rows = [
@@ -1568,19 +1589,14 @@ function architectureLayout(model) {
   // brackets, not "<server>": these labels render as HTML (html=1) in the draw.io export,
   // where a literal "<" opens an (unknown, invisible) tag and silently eats the text.
   const accessChainLabels = hasSaasSide
-    ? ["", "*.pe.jfrog.io", "[server].pe.jfrog.io", "[server].pe.jfrog.io"]
+    ? mtlsMode
+      ? ["", "custom.internal.domain", "custom.internal.domain", "A record → PE IP"]
+      : ["", "*.pe.jfrog.io", "[server].pe.jfrog.io", "[server].pe.jfrog.io"]
     : ["", "customer domain"];
   const publicRouteLabel = "public: [server].jfrog.io";
-  // Custom domain (vanity URL, e.g. artifactory.acme.com) for the private endpoint: the
-  // customer points it at their own load balancer instead of [server].pe.jfrog.io directly.
-  // From there TLS either passes through unmodified by SNI — the LB never terminates it,
-  // so the original [server].pe.jfrog.io name is what JFrog's certificate still has to
-  // match — or the LB terminates the custom domain's own certificate and re-encrypts to
-  // the endpoint. Either way the LB's backend pool target never changes: it's always the
-  // private endpoint's private IP, so the custom domain is never resolvable publicly. Folded
-  // into this same edge label (rather than a separate caption band) since the only free
-  // space nearby is already crossed by the public/cloud-native bypass lines above it.
-  const privatePeLabel = "private (or custom domain): [server].pe.jfrog.io";
+  const privatePeLabel = mtlsMode
+    ? "private: custom.internal.domain → PE IP (no LB)"
+    : "private (or custom domain): [server].pe.jfrog.io";
   const cloudMeta = model.connectivityMeta || DIAGRAM_META[model.connectivityProvider] || DIAGRAM_META.aws;
   // model.connectivityProvider prefers a non-onprem provider (it exists to name the cloud
   // side a PrivateLink/PSC connection attaches to), which is the wrong lens for self-managed:
@@ -1613,17 +1629,25 @@ function architectureLayout(model) {
   const smStackH = smClientDefs.length * accessBoxH + (smClientDefs.length - 1) * smClientGapY;
 
   const accessDefs = hasSaasSide
-    ? [
-      { title: "Internal clients", sub: "CI/CD · Security tools · Users", iconKind: null },
-      { title: "On-Prem ↔ Cloud", sub: cloudMeta.vpn, iconKind: "vpn" },
-      { title: "Corporate DNS", sub: "Conditional forwarder →", iconKind: "dns" },
-      // On-prem DNS servers can't resolve the cloud-side private hosted zone directly — the
-      // conditional forwarder above sends pe.jfrog.io queries across the VPN to this inbound
-      // resolver endpoint in the VPC/VNet, which then resolves them against the private zone.
-      // Cloud-native clients (already inside the VPC/VNet) skip this hop entirely.
-      { title: "DNS Resolver Endpoint", sub: cloudMeta.resolverInboundShort, iconKind: "dns" },
-      { title: "Load Balancer", sub: cloudMeta.lb, iconKind: "lb" },
-    ]
+    ? mtlsMode
+      ? [
+        { title: "Internal clients", sub: "CI/CD · Security tools · Users · client cert (PKI)", iconKind: null },
+        { title: "On-Prem ↔ Cloud", sub: cloudMeta.vpn, iconKind: "vpn" },
+        { title: "Corporate DNS", sub: "Conditional forwarder → custom zone", iconKind: "dns" },
+        { title: "DNS Resolver Endpoint", sub: cloudMeta.resolverInboundShort, iconKind: "dns" },
+        { title: "Private DNS zone", sub: `${cloudMeta.dns} · custom.internal.domain`, iconKind: "dns" },
+      ]
+      : [
+        { title: "Internal clients", sub: "CI/CD · Security tools · Users", iconKind: null },
+        { title: "On-Prem ↔ Cloud", sub: cloudMeta.vpn, iconKind: "vpn" },
+        { title: "Corporate DNS", sub: "Conditional forwarder →", iconKind: "dns" },
+        // On-prem DNS servers can't resolve the cloud-side private hosted zone directly — the
+        // conditional forwarder above sends pe.jfrog.io queries across the VPN to this inbound
+        // resolver endpoint in the VPC/VNet, which then resolves them against the private zone.
+        // Cloud-native clients (already inside the VPC/VNet) skip this hop entirely.
+        { title: "DNS Resolver Endpoint", sub: cloudMeta.resolverInboundShort, iconKind: "dns" },
+        { title: "Load Balancer", sub: cloudMeta.lb, iconKind: "lb" },
+      ]
     : null;
   // Self-managed's access row is a 2×2 grid — Datacenter clients over Cloud clients on the
   // left, VPN over Global Load Balancer on the right — so every connector in it is a plain
@@ -1942,6 +1966,7 @@ function architectureLayout(model) {
   // band with the routing hub (both fan into the grid from the same height, right next to
   // each other) instead of up in the client chain — that keeps every fan-out line short.
   const lbNode = accessNodes.find((n) => n.iconKind === "lb") || accessNodes[accessNodes.length - 1];
+  const peIngressNode = mtlsMode ? accessNodes[accessNodes.length - 1] : lbNode;
   const additionalRow = rowLayout.find((row) => row.key === "additional");
   const peBoxX = gridX;
   const routeBoxX = gridX + peBoxW + routeGapX;
@@ -2062,6 +2087,7 @@ function architectureLayout(model) {
   const route = {
     id: "route1",
     hidden: !hasSaasSide,
+    lbIngress: hasSaasSide && !mtlsMode,
     x: routeBoxX,
     y: routeBoxY,
     w: routeBoxW,
@@ -2078,7 +2104,7 @@ function architectureLayout(model) {
     primaryTargets,
     additionalFan,
     clientBypass,
-    inLabel: hasSaasSide ? publicRouteLabel : null,
+    inLabel: hasSaasSide && !mtlsMode ? publicRouteLabel : null,
   };
 
   // Private Endpoint(s): one dedicated connection per writable site, wired directly — never
@@ -2104,8 +2130,8 @@ function architectureLayout(model) {
       w: peBoxW,
       h: routeBoxH,
       title: "Private Endpoint(s)",
-      sub: `${cloudMeta.pl} · 1 per JPD`,
-      inFromX: lbNode.x + lbNode.w / 2,
+      sub: mtlsMode ? `${cloudMeta.pl} · pass-through TCP 443 · 1 per JPD` : `${cloudMeta.pl} · 1 per JPD`,
+      inFromX: peIngressNode.x + peIngressNode.w / 2,
       inFromY: accessBoxBottom,
       inToX: peOutX,
       inToY: routeBoxY,
@@ -2118,8 +2144,12 @@ function architectureLayout(model) {
       additionalTargets: routeAdditionalAnchors.map((a) => ({ x: centerX(a), y: a.y, id: a.id })),
       cloudNativeBypass,
       inLabel: privatePeLabel,
-      activeLabel: peSingleFailoverPair ? "single custom domain → active" : null,
-      standbyLabel: peSingleFailoverPair ? "standby (manual failover)" : null,
+      activeLabel: peSingleFailoverPair
+        ? (mtlsMode ? "TLS + mTLS · active JPD" : "single custom domain → active")
+        : (mtlsMode ? "TLS + mTLS on JFrog" : null),
+      standbyLabel: peSingleFailoverPair
+        ? (mtlsMode ? "standby JPD (manual PE repoint)" : "standby (manual failover)")
+        : null,
     };
   }
 
@@ -2142,7 +2172,10 @@ function architectureLayout(model) {
     peFan,
     smLbFan,
     hasSaasSide,
-    routeBandLabel: hasSaasSide ? "PRIVATE ENDPOINT · JFROG-SIDE ROUTING" : "REGIONAL LOAD BALANCERS (CUSTOMER-MANAGED)",
+    mtlsMode,
+    routeBandLabel: hasSaasSide
+      ? (mtlsMode ? "PRIVATE ENDPOINT · JFROG-SIDE ROUTING (mTLS path)" : "PRIVATE ENDPOINT · JFROG-SIDE ROUTING")
+      : "REGIONAL LOAD BALANCERS (CUSTOMER-MANAGED)",
     titleText,
     productText,
     footerLeft,
@@ -2224,9 +2257,11 @@ function buildArchitectureSvg(model) {
   const route = layout.route;
   background.push(T(pad, route.labelY, layout.routeBandLabel, { fill: C.route, size: 10, weight: 600 }));
   if (!route.hidden) {
-    connectors.push(`<path d="${ELBOW(route.inFromX, route.inFromY, route.inToX, route.inToY)}" fill="none" class="jfd-flow jfd-flow-net" stroke="${C.net}" stroke-width="1.4" marker-end="url(#geo-net)"/>`);
-    if (route.inLabel) {
-      connectors.push(T(route.inFromX + 10, (route.inFromY + route.inToY) / 2, route.inLabel, { fill: C.muted, size: 9 }));
+    if (route.lbIngress) {
+      connectors.push(`<path d="${ELBOW(route.inFromX, route.inFromY, route.inToX, route.inToY)}" fill="none" class="jfd-flow jfd-flow-net" stroke="${C.net}" stroke-width="1.4" marker-end="url(#geo-net)"/>`);
+      if (route.inLabel) {
+        connectors.push(T(route.inFromX + 10, (route.inFromY + route.inToY) / 2, route.inLabel, { fill: C.muted, size: 9 }));
+      }
     }
     // Optional path: an on-prem client can skip the VPN + private-endpoint chain entirely
     // and reach the public routing URL directly over the internet.
@@ -2493,10 +2528,13 @@ function buildArchitectureDrawio(model) {
   // straight from the Internal Load Balancer node in the access band instead.
   const route = layout.route;
   const lbNode = acc.nodes.find((n) => n.iconKind === "lb") || acc.nodes[acc.nodes.length - 1];
+  const peIngressNode = layout.mtlsMode ? acc.nodes[acc.nodes.length - 1] : lbNode;
   const fanOutSourceId = route.hidden ? lbNode.id : route.id;
-  cells.push(label(layout.routeBandLabel, `align=left;verticalAlign=middle;fontSize=10;fontStyle=1;fontColor=${C.route};`, layout.pad, route.labelY - 12, 220, 18));
+  cells.push(label(layout.routeBandLabel, `align=left;verticalAlign=middle;fontSize=10;fontStyle=1;fontColor=${C.route};`, layout.pad, route.labelY - 12, 320, 18));
   if (!route.hidden) {
-    cells.push(connect(route.inLabel || "", `edgeStyle=orthogonalEdgeStyle;html=1;endArrow=blockThin;endFill=1;strokeColor=${C.net};strokeWidth=1.4;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=9;fontColor=${C.muted};labelBackgroundColor=#ffffff;`, lbNode.id, route.id));
+    if (route.lbIngress) {
+      cells.push(connect(route.inLabel || "", `edgeStyle=orthogonalEdgeStyle;html=1;endArrow=blockThin;endFill=1;strokeColor=${C.net};strokeWidth=1.4;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=9;fontColor=${C.muted};labelBackgroundColor=#ffffff;`, lbNode.id, route.id));
+    }
     if (route.clientBypass) {
       cells.push(connect("public: via JFrog DNS routing", `html=1;dashed=1;dashPattern=3 4;endArrow=blockThin;endFill=1;strokeColor=${C.muted};strokeWidth=1.2;fontColor=${C.muted};fontSize=9;edgeStyle=orthogonalEdgeStyle;exitX=0.5;exitY=1;entryX=0.15;entryY=0;`, acc.nodes[0].id, route.id));
     }
@@ -2525,7 +2563,7 @@ function buildArchitectureDrawio(model) {
   // site, wired directly, never through the routing box right beside it.
   const pf = layout.peFan;
   if (pf) {
-    cells.push(connect(pf.inLabel || "", `edgeStyle=orthogonalEdgeStyle;html=1;endArrow=blockThin;endFill=1;strokeColor=${C.net};strokeWidth=1.4;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=9;fontColor=${C.muted};labelBackgroundColor=#ffffff;`, lbNode.id, pf.id));
+    cells.push(connect(pf.inLabel || "", `edgeStyle=orthogonalEdgeStyle;html=1;endArrow=blockThin;endFill=1;strokeColor=${C.net};strokeWidth=1.4;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=9;fontColor=${C.muted};labelBackgroundColor=#ffffff;`, peIngressNode.id, pf.id));
     if (pf.cloudNativeBypass) {
       cells.push(connect("cloud-native: same VPC, no VPN", `html=1;dashed=1;dashPattern=3 4;endArrow=blockThin;endFill=1;strokeColor=${C.muted};strokeWidth=1.2;fontColor=${C.muted};fontSize=9;edgeStyle=orthogonalEdgeStyle;exitX=0.5;exitY=1;entryX=0.85;entryY=0;`, acc.nodes[0].id, pf.id));
     }
@@ -2631,7 +2669,11 @@ function buildArchitectureDrawio(model) {
     ["Primary JPD / JPS", C.accent, C.primaryFill],
     ["Additional Platform Instance", C.info, C.additionalFill],
     ["Edge (self-managed / Cloud)", C.warn, C.edgeFill],
-    [layout.hasSaasSide ? "Client / network access (DNS, LB, Private Endpoint)" : "Client / network access (Datacenter + Cloud clients)", C.net, C.netFill],
+    [layout.hasSaasSide
+      ? (layout.mtlsMode
+        ? "Client / network access (VPN · DNS · Private DNS · PE pass-through · TLS+mTLS on JFrog)"
+        : "Client / network access (DNS, LB, Private Endpoint)")
+      : "Client / network access (Datacenter + Cloud clients)", C.net, C.netFill],
     [layout.hasSaasSide ? "JFrog-side DNS routing" : "Regional Load Balancers (customer-managed)", C.route, C.routeFill],
   ];
   legend.forEach(([text, stroke, fill], index) => {
@@ -2891,6 +2933,13 @@ function render(result) {
   const diagramDrawio = buildArchitectureDrawio(result.diagramSites);
   window.__lastDiagramSvg = diagramSvg;
   window.__lastDiagramDrawio = diagramDrawio;
+  const mtlsDiagram = !!result.diagramSites?.mtlsMode;
+  const diagramIntro = mtlsDiagram
+    ? `Geography grid: <strong>West ← Central → East → Other</strong>. This is the <strong>mTLS + custom internal domain</strong> variant: on-prem CI/CD clients carry a client cert, traverse VPN → corporate DNS → inbound resolver → <strong>Private DNS zone</strong> (no load balancer on the PE path), reach Private Endpoint pass-through, then <strong>TLS + mTLS terminate on JFrog SaaS</strong>. Public and cloud-native bypass paths still apply. JFrog-side DNS routing handles the public routing URL only — Private Endpoints fan directly into each JPD.`
+    : `Geography grid: <strong>West ← Central → East → Other</strong>. Empty geography columns are hidden. On-Prem DC names and deployments with no region go to <strong>OTHER</strong> (not Central). The top overview band always shows on-prem CI/CD client connectivity (VPN, conditional DNS forwarder, resolver endpoint, load balancer) plus cloud-native and public bypass paths — regardless of whether the order includes an actual Self Managed JPS region — and Private Endpoint / JFrog-side DNS routing (manual failover / geo-location) in front of the writable-site grid; the footer calls out auth and monitoring for this configuration.`;
+  const diagramLegendNet = mtlsDiagram
+    ? "Client / network access (VPN · DNS · Private DNS · PE pass-through · TLS+mTLS on JFrog)"
+    : "Client / network access (VPN · DNS · LB · Private Endpoint)";
   const regionSummary = result.input.regions.length
     ? result.input.regions.map((r) => {
       const provider = IAAS_LABELS[r.iaas] || r.iaas || "";
@@ -2959,11 +3008,11 @@ function render(result) {
     ${renderLatestLicenseReference(input)}
 
     <div class="result-block">
-      <h3>Architecture diagram</h3>
-      <p class="muted" style="margin:0 0 8px">Geography grid: <strong>West ← Central → East → Other</strong>. Empty geography columns are hidden. On-Prem DC names and deployments with no region go to <strong>OTHER</strong> (not Central). The top overview band always shows on-prem CI/CD client connectivity (VPN, conditional DNS forwarder, resolver endpoint, load balancer) plus cloud-native and public bypass paths — regardless of whether the order includes an actual Self Managed JPS region — and Private Endpoint / JFrog-side DNS routing (manual failover / geo-location) in front of the writable-site grid; the footer calls out auth and monitoring for this configuration.</p>
+      <h3>Architecture diagram${mtlsDiagram ? " — mTLS private access" : ""}</h3>
+      <p class="muted" style="margin:0 0 8px">${diagramIntro}</p>
       <div class="diagram-wrap">${diagramSvg}</div>
       <div class="diagram-legend">
-        <span class="lg-net">Client / network access (VPN · DNS · LB · Private Endpoint)</span>
+        <span class="lg-net">${diagramLegendNet}</span>
         <span class="lg-route">JFrog-side DNS routing (failover / geo)</span>
         <span class="lg-primary">Primary JPD</span>
         <span class="lg-additional">Additional Platform Instance</span>
@@ -3255,6 +3304,8 @@ function resetForm() {
   document.querySelector('input[name="iaas"][value="aws"]').checked = true;
   const edgeSelf = document.querySelector('input[name="edgeOps"][value="selfmanaged"]');
   if (edgeSelf) edgeSelf.checked = true;
+  const privateStandard = document.querySelector('input[name="privateAccess"][value="standard"]');
+  if (privateStandard) privateStandard.checked = true;
   $("platformQty").value = "1";
   $("saasUnits").value = "0";
   $("saasUnitSizeGB").value = "1000";
@@ -4084,6 +4135,7 @@ function applyInputs(raw) {
   setRadio("deployModel", input.deployModel, "saas");
   setRadio("iaas", input.iaas, "aws");
   setRadio("edgeOps", input.edgeOps, "selfmanaged");
+  setRadio("privateAccess", input.privateAccess, "standard");
 
   if ($("platformQty")) $("platformQty").value = String(Math.max(1, Number(input.quantity) || 1));
   if ($("saasPlatformQty")) {

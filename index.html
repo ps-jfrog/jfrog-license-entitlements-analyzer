@@ -106,6 +106,15 @@
       <span class="hint">Most customer Edge POPs are self-managed and receive Release Bundles from Primary. Use Cloud Edge only when the order is JFrog-operated Distribution Cloud Edge Nodes.</span>
     </div>
 
+    <div class="field" id="privateAccessField">
+      <label>Fully Managed private access (Ent X+)</label>
+      <div class="radio-group">
+        <label><input type="radio" name="privateAccess" value="standard" checked /> Standard TLS (optional LB in front of PE)</label>
+        <label><input type="radio" name="privateAccess" value="mtls" /> mTLS + custom internal domain (TLS on JFrog · no LB on PE)</label>
+      </div>
+      <span class="hint">mTLS is a Platform feature (Artifactory / Xray / Access) — not MyJFrog. When selected, the architecture diagram drops the load-balancer hop, routes via a customer private DNS zone to Private Endpoint pass-through, and shows TLS + client-cert verification terminating on JFrog SaaS. Tokens / SAML / OIDC still apply.</span>
+    </div>
+
     <div class="section-label">Additional products (SF names)</div>
     <p class="hint" style="margin-top:-4px;margin-bottom:10px">Check what appears on the order. Labels match Salesforce where known. Qty = SKU quantity (or credits / buckets).</p>
 
