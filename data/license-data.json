@@ -1,43 +1,42 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-24T12:43:37.357Z",
+  "generatedAt": "2026-09-25T12:46:00.803Z",
   "status": "review_required",
   "sources": {
     "productMatrix": {
       "url": "https://docs.jfrog.com/installation/docs/license-matrix-pro-x-enterprise-x-enterprise",
       "updatedAt": "2026-08-02T06:41:48.000Z",
-      "fetchedAt": "2026-09-24T12:43:37.357Z",
+      "fetchedAt": "2026-09-25T12:46:00.803Z",
       "sha256": "4aaf62bb569b05b526a9c1f74859d6f8989d34d49bf8bd4f852e121fc8ad0394",
       "contentType": "text/markdown; charset=utf-8"
     },
     "featureMatrix": {
       "url": "https://docs.jfrog.com/installation/docs/feature-comparison-matrix-for-self-mangaged-jpds",
       "updatedAt": "2026-05-29T11:59:44.000Z",
-      "fetchedAt": "2026-09-24T12:43:37.357Z",
+      "fetchedAt": "2026-09-25T12:46:00.803Z",
       "sha256": "5102dca8013f1f97ed07582771f3d44bc1444454c6f2e197d916cf0728197062",
       "contentType": "text/markdown; charset=utf-8"
     },
     "projects": {
       "url": "https://docs.jfrog.com/projects/docs/projects-subscription-allocation",
       "updatedAt": "2026-08-02T07:02:37.000Z",
-      "fetchedAt": "2026-09-24T12:43:37.357Z",
+      "fetchedAt": "2026-09-25T12:46:00.803Z",
       "sha256": "9a9b8e82a4d3b9974a5cd2b63b0966098d679cb044812e3233c65ecbe705ca8d",
       "contentType": "text/markdown; charset=utf-8"
     },
     "advancedSecurity": {
       "url": "https://docs.jfrog.com/security/docs/advanced-security",
       "updatedAt": "2026-01-19T08:29:27.000Z",
-      "fetchedAt": "2026-09-24T12:43:37.357Z",
+      "fetchedAt": "2026-09-25T12:46:00.803Z",
       "sha256": "acdb51648e63db7cfa70860ee0a8f0057edb7e21102c0ef5fe9340b88a1eb3ad",
       "contentType": "text/markdown; charset=utf-8"
     },
     "pricing": {
       "url": "https://jfrog.com/pricing/",
       "updatedAt": null,
-      "fetchedAt": "2026-09-23T12:45:04.704Z",
-      "sha256": "1dfb1f613d3f174b3f44fe523f0c986a62d7a44400edc9ca503cf4b3e97aaac3",
-      "contentType": "text/html; charset=UTF-8",
-      "blocked": true
+      "fetchedAt": "2026-09-25T12:46:00.803Z",
+      "sha256": "bb67f099054e6d48a8ac230e85836ff3e24ff897b9dce5a120a6f25fa3e937e7",
+      "contentType": "text/html; charset=UTF-8"
     }
   },
   "thresholds": {
@@ -1095,15 +1094,6 @@
       "sources": [
         "productMatrix",
         "advancedSecurity"
-      ]
-    },
-    {
-      "id": "pricing-source-blocked",
-      "severity": "review_required",
-      "tiers": [],
-      "message": "jfrog.com/pricing/ returned an AWS WAF bot-challenge page instead of content this run. SaaS base consumption, contributing developer, and window-day thresholds are carried over from the value last verified at 2026-09-23T12:45:04.704Z; re-run once the block clears to reverify.",
-      "sources": [
-        "pricing"
       ]
     }
   ],
