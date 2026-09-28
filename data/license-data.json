@@ -1,33 +1,33 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-27T13:01:57.097Z",
+  "generatedAt": "2026-09-28T15:27:40.048Z",
   "status": "review_required",
   "sources": {
     "productMatrix": {
       "url": "https://docs.jfrog.com/installation/docs/license-matrix-pro-x-enterprise-x-enterprise",
-      "updatedAt": "2026-08-02T06:41:48.000Z",
-      "fetchedAt": "2026-09-27T13:01:57.097Z",
-      "sha256": "4aaf62bb569b05b526a9c1f74859d6f8989d34d49bf8bd4f852e121fc8ad0394",
+      "updatedAt": "2026-09-28T08:40:16.000Z",
+      "fetchedAt": "2026-09-28T15:27:40.048Z",
+      "sha256": "3266b74df262fe75fabe2675272920859b67434a077bf11291071e1e524c7afe",
       "contentType": "text/markdown; charset=utf-8"
     },
     "featureMatrix": {
       "url": "https://docs.jfrog.com/installation/docs/feature-comparison-matrix-for-self-mangaged-jpds",
-      "updatedAt": "2026-05-29T11:59:44.000Z",
-      "fetchedAt": "2026-09-27T13:01:57.097Z",
-      "sha256": "5102dca8013f1f97ed07582771f3d44bc1444454c6f2e197d916cf0728197062",
+      "updatedAt": "2026-09-28T07:54:00.000Z",
+      "fetchedAt": "2026-09-28T15:27:40.048Z",
+      "sha256": "172a2cf3ba4904d67e8c77a46c923068f8c2f2e5e2eb54ad9d7021c9d84fe678",
       "contentType": "text/markdown; charset=utf-8"
     },
     "projects": {
       "url": "https://docs.jfrog.com/projects/docs/projects-subscription-allocation",
       "updatedAt": "2026-08-02T07:02:37.000Z",
-      "fetchedAt": "2026-09-27T13:01:57.097Z",
+      "fetchedAt": "2026-09-28T15:27:40.048Z",
       "sha256": "9a9b8e82a4d3b9974a5cd2b63b0966098d679cb044812e3233c65ecbe705ca8d",
       "contentType": "text/markdown; charset=utf-8"
     },
     "advancedSecurity": {
       "url": "https://docs.jfrog.com/security/docs/advanced-security",
       "updatedAt": "2026-01-19T08:29:27.000Z",
-      "fetchedAt": "2026-09-27T13:01:57.097Z",
+      "fetchedAt": "2026-09-28T15:27:40.048Z",
       "sha256": "acdb51648e63db7cfa70860ee0a8f0057edb7e21102c0ef5fe9340b88a1eb3ad",
       "contentType": "text/markdown; charset=utf-8"
     },
@@ -36,7 +36,8 @@
       "updatedAt": null,
       "fetchedAt": "2026-09-27T13:01:57.097Z",
       "sha256": "3a2b9e9e3114183febfb1ca83178dc3d8331156b1581c4e4e40bcb9a120a74f8",
-      "contentType": "text/html; charset=UTF-8"
+      "contentType": "text/html; charset=UTF-8",
+      "blocked": true
     }
   },
   "thresholds": {
@@ -124,8 +125,8 @@
         "raw": "✅ Included"
       }
     },
-    "jas": {
-      "label": "JAS",
+    "jfrog_advanced_security_jas": {
+      "label": "JFrog Advanced Security (JAS)",
       "prox": {
         "state": "not_included",
         "raw": "❌ Not included"
@@ -274,6 +275,25 @@
       "prox": {
         "state": "included",
         "raw": "✅ Included"
+      },
+      "entx": {
+        "state": "included",
+        "raw": "✅ Included"
+      },
+      "entplus": {
+        "state": "included",
+        "raw": "✅ Included"
+      }
+    },
+    "jfrog_advanced_security_jas": {
+      "label": "JFrog Advanced Security (JAS)",
+      "nonCommercial": {
+        "state": "not_included",
+        "raw": "❌ Not included"
+      },
+      "prox": {
+        "state": "not_included",
+        "raw": "❌ Not included"
       },
       "entx": {
         "state": "included",
@@ -1085,15 +1105,12 @@
   },
   "conflicts": [
     {
-      "id": "jas-entx-included-vs-addon",
+      "id": "pricing-source-blocked",
       "severity": "review_required",
-      "tiers": [
-        "entx"
-      ],
-      "message": "The Product License Matrix marks JAS included for Enterprise X, while the Advanced Security page calls it an add-on. Do not auto-enable JAS from the base tier; verify the order.",
+      "tiers": [],
+      "message": "jfrog.com/pricing/ returned an AWS WAF bot-challenge page instead of content this run. SaaS base consumption, contributing developer, and window-day thresholds are carried over from the value last verified at 2026-09-27T13:01:57.097Z; re-run once the block clears to reverify.",
       "sources": [
-        "productMatrix",
-        "advancedSecurity"
+        "pricing"
       ]
     }
   ],
