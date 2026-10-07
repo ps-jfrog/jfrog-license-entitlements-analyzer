@@ -66,9 +66,57 @@ function state(raw) {
   return "conditional";
 }
 
-function parseProductMatrix(markdown) {
+function parseProductMatrixFromJSX(content) {
   const rows = {};
-  for (const line of markdown.split(/\r?\n/)) {
+  const rowMatches = content.match(/<tr>[\s\S]*?<\/tr>/g) || [];
+
+  let isHeaderRow = true;
+  for (const rowHtml of rowMatches) {
+    const cells = rowHtml.match(/<t[dh]>([\s\S]*?)<\/t[dh]>/g) || [];
+    if (cells.length !== 4) continue;
+
+    const cellContents = cells.map((cell) => {
+      let content = cell
+        .replace(/<[^>]+>/g, " ")
+        .replace(/\*\*/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+      return content;
+    });
+
+    // Skip header row
+    if (isHeaderRow && /^product$/i.test(cellContents[0])) {
+      isHeaderRow = false;
+      continue;
+    }
+    isHeaderRow = false;
+
+    if (!cellContents.slice(1).some((cell) => /included|✅|❌/i.test(cell))) continue;
+
+    const key = cellContents[0].toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+    rows[key] = {
+      label: cellContents[0],
+      prox: { state: state(cellContents[1]), raw: cellContents[1] },
+      entx: { state: state(cellContents[2]), raw: cellContents[2] },
+      entplus: { state: state(cellContents[3]), raw: cellContents[3] },
+    };
+  }
+
+  return rows;
+}
+
+function parseProductMatrix(content) {
+  // Try JSX/HTML table format first (newer format)
+  if (content.includes("<Table") || content.includes("<tr>")) {
+    const rows = parseProductMatrixFromJSX(content);
+    if (Object.keys(rows).length >= 10) {
+      return rows;
+    }
+  }
+
+  // Fall back to markdown table format
+  const rows = {};
+  for (const line of content.split(/\r?\n/)) {
     const cells = markdownCells(line);
     if (cells.length !== 4 || isSeparator(cells) || /^product$/i.test(cells[0])) continue;
     if (!cells.slice(1).some((cell) => /included|✅|❌/i.test(cell))) continue;
@@ -80,6 +128,7 @@ function parseProductMatrix(markdown) {
       entplus: { state: state(cells[3]), raw: cells[3] },
     };
   }
+
   if (Object.keys(rows).length < 10) {
     throw new Error(`productMatrix: expected at least 10 products, parsed ${Object.keys(rows).length}`);
   }
