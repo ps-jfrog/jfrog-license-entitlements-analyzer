@@ -1,41 +1,41 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-27T13:12:14.628Z",
+  "generatedAt": "2026-10-28T14:01:11.524Z",
   "status": "verified",
   "sources": {
     "productMatrix": {
       "url": "https://docs.jfrog.com/installation/docs/license-matrix-pro-x-enterprise-x-enterprise",
       "updatedAt": "2026-10-14T04:03:28.000Z",
-      "fetchedAt": "2026-10-27T13:12:14.628Z",
+      "fetchedAt": "2026-10-28T14:01:11.524Z",
       "sha256": "2d3e1eb5ee0ecd7e4391fd5ce32fd67033e691648cf0c6488030393dcd799430",
       "contentType": "text/markdown; charset=utf-8"
     },
     "featureMatrix": {
       "url": "https://docs.jfrog.com/installation/docs/feature-comparison-matrix-for-self-mangaged-jpds",
       "updatedAt": "2026-09-29T07:17:51.000Z",
-      "fetchedAt": "2026-10-27T13:12:14.628Z",
+      "fetchedAt": "2026-10-28T14:01:11.524Z",
       "sha256": "c9cbbcb019e3a50a77d88e70be0eee4d7a0fe040fc71f152b71230a3954b15ba",
       "contentType": "text/markdown; charset=utf-8"
     },
     "projects": {
       "url": "https://docs.jfrog.com/projects/docs/projects-subscription-allocation",
       "updatedAt": "2026-08-02T07:02:37.000Z",
-      "fetchedAt": "2026-10-27T13:12:14.628Z",
+      "fetchedAt": "2026-10-28T14:01:11.524Z",
       "sha256": "b6db1b9a3c21816a827e181e5c5cb559ec62bb1921029563e397b056b9df54e5",
       "contentType": "text/markdown; charset=utf-8"
     },
     "advancedSecurity": {
       "url": "https://docs.jfrog.com/security/docs/advanced-security",
       "updatedAt": "2026-01-19T08:29:27.000Z",
-      "fetchedAt": "2026-10-27T13:12:14.628Z",
+      "fetchedAt": "2026-10-28T14:01:11.524Z",
       "sha256": "de5731723a9d4e538985428984f22eb1e6ffbbd0fe2d219b1f364faf975228ce",
       "contentType": "text/markdown; charset=utf-8"
     },
     "pricing": {
       "url": "https://jfrog.com/pricing/",
       "updatedAt": null,
-      "fetchedAt": "2026-10-27T13:12:14.628Z",
-      "sha256": "47b2b047fc78ede932573f8af9e84e8e0c6a6a52d9794a68c47c9d496fa02896",
+      "fetchedAt": "2026-10-28T14:01:11.524Z",
+      "sha256": "db968a568384aa4b3312806a54a664aaa7b00917566cd9e3d7b56906179b75fc",
       "contentType": "text/html; charset=UTF-8"
     }
   },
