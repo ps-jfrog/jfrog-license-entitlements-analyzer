@@ -74,6 +74,49 @@ header p {
   white-space: nowrap;
 }
 
+.traffic-matrix {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.traffic-matrix th,
+.traffic-matrix td {
+  border: 1px solid var(--border);
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.traffic-matrix th {
+  background: var(--panel-2);
+  font-weight: 600;
+}
+
+.traffic-ok { color: var(--accent); }
+.traffic-no { color: var(--danger); }
+.traffic-partial { color: var(--warn); }
+
+.traffic-patterns-block .traffic-impact {
+  margin-bottom: 0;
+}
+
+.diagram-legend .lg-publish::before {
+  background: rgba(64, 191, 106, 0.2);
+  border-color: var(--accent);
+}
+
+.diagram-legend .lg-pull::before {
+  background: rgba(245, 166, 35, 0.15);
+  border-color: var(--warn);
+}
+
+.diagram-legend .lg-unsupported::before {
+  background: transparent;
+  border-style: dashed;
+}
+
 .layout {
   display: grid;
   grid-template-columns: 440px 1fr;

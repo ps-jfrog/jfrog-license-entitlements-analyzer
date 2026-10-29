@@ -36,6 +36,12 @@ Gather before architecture workshops:
 | **Writable second site** | Second JPS (e.g. EU prod) | Needs **additional** deployment entitlements — HA is not a second site |
 | **Edge** | Read-only Distribution / Artifactory Edge | **Separate** Edge license |
 
+**Edge traffic (publish vs pull):**
+
+- CI **deploy / promote** → **writable** SaaS routing URL or self-managed JPS — **never** Edge.
+- Production **pull** → Edge hostname after **Release Bundle Distribution** (or lazy smart-remote read after content exists on SaaS — still not write-through).
+- **Write-through cache on Edge is not supported**; active pull replication to pre-warm smart remotes is **not on Edge**. Pre-stage with Distribution or use a **full** self-hosted Artifactory cache tier (smart remote + optional active replication).
+
 Rules of thumb:
 
 - Ent X self-managed base = **3** servers → typical **one** 3-node HA cluster  

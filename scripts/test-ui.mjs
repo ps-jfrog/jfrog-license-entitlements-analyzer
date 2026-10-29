@@ -150,6 +150,13 @@ function regionsNoOverlapMonitoring(markup, label) {
 }
 regionsNoOverlapMonitoring(svg, "hybrid");
 
+assert(/traffic-patterns-block/.test(window.document.querySelector("#results")?.innerHTML || ""),
+  "hybrid diagram should include Traffic & cache patterns HTML block");
+assert(/Writable JPD \/ JPS/.test(window.document.querySelector("#results")?.innerHTML || ""),
+  "traffic capability table headers missing");
+assert(/SH read-cache/.test(svg), "hybrid diagram should show optional SH read-cache tier");
+assert(/smart remote · read-through/.test(svg), "hybrid smart-remote connector label missing");
+
 // Full topology (primary + additional + edge) exercises both animated flows and
 // gives the draw.io export something to connect.
 $("regionList").innerHTML = "";
@@ -166,6 +173,8 @@ assert(styleBlock, "diagram is missing its inline animation stylesheet");
 assert(/@keyframes jfd-flow-fed/.test(styleBlock) && /@keyframes jfd-flow-dist/.test(styleBlock), "flow keyframes missing");
 assert(/@keyframes jfd-flow-net/.test(styleBlock) && /@keyframes jfd-flow-route/.test(styleBlock) && /@keyframes jfd-flow-bypass/.test(styleBlock),
   "flow keyframes for the access/routing/bypass connectors are missing — every arrow should animate, not just federation/distribution");
+assert(/@keyframes jfd-flow-publish/.test(styleBlock) && /@keyframes jfd-flow-pull/.test(styleBlock),
+  "traffic overlay publish/pull keyframes missing");
 assert(/prefers-reduced-motion/.test(styleBlock), "animation must honour prefers-reduced-motion");
 assert(/svg\.jfd-paused \.jfd-flow\s*\{\s*animation:\s*none/.test(styleBlock), "paused state must stop the animation");
 styleBlock.split("\n")
@@ -179,6 +188,11 @@ assert(/class="jfd-flow jfd-flow-dist"/.test(flowSvg), "distribution connectors 
 assert(/class="jfd-flow jfd-flow-net"/.test(flowSvg), "client/network-access chain connectors are not animated");
 assert(/class="jfd-flow jfd-flow-route"/.test(flowSvg), "JFrog-side routing fan-out connectors are not animated");
 assert(/class="jfd-flow jfd-flow-bypass"/.test(flowSvg), "optional client-bypass connector is not animated");
+assert(/class="jfd-flow jfd-flow-publish"/.test(flowSvg), "CI publish traffic overlay is not animated");
+assert(/class="jfd-flow jfd-flow-pull"/.test(flowSvg), "deploy pull traffic overlay is not animated");
+assert(/deploy · promote · OSS resolve/.test(flowSvg), "publish traffic label missing from diagram");
+assert(/pull releases · read-only/.test(flowSvg), "pull traffic label missing from diagram");
+assert(/CI deploy ✗/.test(flowSvg), "unsupported CI-deploy-to-Edge label missing");
 
 const mountedDiagram = window.document.querySelector("#results .diagram-wrap svg");
 assert(mountedDiagram, "diagram is not mounted in the results panel");
@@ -206,9 +220,10 @@ assert(drawioNodeIds.length === 4, `expected 4 draw.io node shapes, got ${drawio
 assert(new Set(drawioNodeIds).size === drawioNodeIds.length, "draw.io node ids must be unique");
 const drawioEdges = [...drawio.matchAll(/style="([^"]*)" edge="1" parent="1" source="([^"]+)" target="([^"]+)"/g)];
 const animatedEdges = drawioEdges.filter(([, style]) => /flowAnimation=1/.test(style));
-assert(animatedEdges.length === 3, `expected 3 flow-animated draw.io connectors (1 federation + 2 distribution), got ${animatedEdges.length}`);
+assert(animatedEdges.length === 6, `expected 6 flow-animated draw.io connectors (fed + dist + traffic), got ${animatedEdges.length}`);
+const allShapeIdsEarly = [...drawio.matchAll(/<mxCell id="([^"]+)"[^>]* vertex="1"/g)].map((m) => m[1]);
 animatedEdges.forEach(([, , source, target]) => {
-  assert(drawioNodeIds.includes(source) && drawioNodeIds.includes(target),
+  assert(allShapeIdsEarly.includes(source) && allShapeIdsEarly.includes(target),
     `draw.io edge points at a missing shape (${source} -> ${target})`);
 });
 

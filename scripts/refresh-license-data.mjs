@@ -58,11 +58,19 @@ function isSeparator(cells) {
   return cells.length && cells.every((cell) => /^:?-{2,}:?$/.test(cell));
 }
 
+// A bare "Included" (or an equivalent whole-feature phrase) with no trailing
+// qualifier. Anything with extra text after it — "Included With JFrog Ultimate
+// only", "Included (with custom S3 endpoints)", "JCR only (...)" — is a
+// condition on the base inclusion, not a blanket yes, so it must not collapse
+// to the same green "included" badge as a plain match.
+const BARE_INCLUDED = /^✅?\s*(included|built-in|all package types|single replication between two instances|24\/7 sla support|high touch support|\d+\s*projects)\s*$/i;
+
 function state(raw) {
   const value = String(raw || "").trim();
   if (/not included/i.test(value) || value.includes("❌")) return "not_included";
-  if (/included|built-in|all package types|single replication|support/i.test(value) || value.includes("✅")) return "included";
   if (/^\d+$/.test(value)) return "threshold";
+  if (BARE_INCLUDED.test(value)) return "included";
+  if (/included|✅/i.test(value)) return "conditional";
   return "conditional";
 }
 
@@ -240,16 +248,26 @@ function parseThresholds(source, previousThresholds) {
 
 function detectConflicts(productMatrix, sources) {
   const conflicts = [];
-  const jas = productMatrix.jas;
+  // Row keys are slugified from the matrix label (e.g. "JFrog Advanced Security
+  // (JAS)" -> "jfrog_advanced_security_jas") — look it up by label, not a
+  // hardcoded key, so a wording/format change upstream can't silently make
+  // this lookup miss and drop the conflict check entirely.
+  const jasKey = Object.keys(productMatrix).find((key) => /advanced security/i.test(productMatrix[key].label));
+  const jas = jasKey ? productMatrix[jasKey] : null;
   const advancedSecurityIsAddon = /Advanced Security Add-on[^]*?available with the Enterprise X or Enterprise\+/i
     .test(sources.advancedSecurity.text.replace(/\*/g, ""));
-  if (jas?.entx?.state === "included" && advancedSecurityIsAddon) {
-    conflicts.push({
-      id: "jas-entx-included-vs-addon",
-      severity: "review_required",
-      tiers: ["entx"],
-      message: "The Product License Matrix marks JAS included for Enterprise X, while the Advanced Security page calls it an add-on. Do not auto-enable JAS from the base tier; verify the order.",
-      sources: ["productMatrix", "advancedSecurity"],
+  if (advancedSecurityIsAddon) {
+    const tierNames = { entx: "Enterprise X", entplus: "Enterprise +" };
+    ["entx", "entplus"].forEach((tier) => {
+      if (jas?.[tier]?.state === "included") {
+        conflicts.push({
+          id: `jas-${tier}-included-vs-addon`,
+          severity: "review_required",
+          tiers: [tier],
+          message: `The Product License Matrix marks JAS included for ${tierNames[tier]}, while the Advanced Security page calls it an add-on. Do not auto-enable JAS from the base tier; verify the order.`,
+          sources: ["productMatrix", "advancedSecurity"],
+        });
+      }
     });
   }
   return conflicts;

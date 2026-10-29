@@ -382,7 +382,7 @@ const PS_CHECKLIST = [
   },
   {
     title: "Edge licenses are separate",
-    detail: "Distribution / Artifactory Edge do not count toward the 1/3/6 server inclusion. Most Edge POPs are customer self-managed; SaaS 'Distribution Cloud Edge Nodes' may be JFrog-operated — confirm ops model.",
+    detail: "Distribution / Artifactory Edge do not count toward the 1/3/6 server inclusion. Most Edge POPs are customer self-managed; SaaS 'Distribution Cloud Edge Nodes' may be JFrog-operated — confirm ops model. CI publishes to writable JPD/JPS only; Edge is for Distribution + read-only pull — no write-through cache or CI deploy to Edge.",
   },
   {
     title: "Verify live entitlements before build",
@@ -1052,6 +1052,24 @@ function buildDiagramModel(input, ctx) {
   }
   const monitoringNote = `Monitoring — ${monitoringBits.join(" · ")}`;
 
+  const smWritableSites = [...primaries, ...additionals].filter(
+    (s) => (s.siteKind || (s.iaas === "onprem" ? "selfmanaged" : "saas")) === "selfmanaged",
+  );
+  const showTrafficSemantics = edgeNodes.length > 0 || input.deployModel === "hybrid";
+  const showShCacheTier = input.deployModel === "hybrid" && hasSaasSide && hasSelfManagedSide && smWritableSites.length > 0;
+  const trafficPatterns = buildTrafficPatternBullets({
+    deployModel: input.deployModel,
+    edgeCount: Math.max(edgeSku, edgeNodes.length),
+    edgeOps,
+    edgeNodes,
+    primaries,
+    additionals,
+    hasSaasSide,
+    hasSelfManagedSide,
+    showShCacheTier,
+    mtlsMode,
+  });
+
   return {
     iaas,
     iaasLabel: iaasSummaryLabel(regions, iaas),
@@ -1081,7 +1099,41 @@ function buildDiagramModel(input, ctx) {
     authNote: authNoteWithMtls,
     mtlsMode,
     monitoringNote,
+    showTrafficSemantics,
+    showShCacheTier,
+    trafficPatterns,
   };
+}
+
+function buildTrafficPatternBullets(ctx) {
+  const bullets = [];
+  const edgeLabel = (ctx.edgeOps || "selfmanaged") === "cloud" ? "Cloud Edge" : "self-managed Edge";
+  const edgeCount = ctx.edgeCount || 0;
+
+  if (ctx.hasSaasSide) {
+    bullets.push(
+      ctx.mtlsMode
+        ? "CI publish / promote / OSS resolve → writable Fully Managed JPD via routing URL or private custom domain (mTLS) — never Edge."
+        : "CI publish / promote / OSS resolve → writable Fully Managed JPD via public routing URL and/or [server].pe.jfrog.io — never Edge.",
+    );
+  }
+  if (ctx.hasSelfManagedSide && ctx.deployModel !== "saas") {
+    bullets.push("Self Managed JPS remains a writable target for deploy when licensed — separate from read-only Edge nodes.");
+  }
+  if (edgeCount > 0) {
+    const regions = [...new Set((ctx.edgeNodes || []).map((e) => e.region).filter(Boolean))];
+    const regionNote = regions.length ? ` (${regions.join(", ")})` : "";
+    bullets.push(
+      `${edgeCount} ${edgeLabel} node(s)${regionNote} → runtime / regional pull URL only; content arrives via Release Bundle Distribution from Primary — not CI deploy.`,
+    );
+    bullets.push("Write-through cache on Edge is not supported: smart remotes on Edge are read-through (lazy on GET) only; no active pull replication warm-up on Edge.");
+  } else if (ctx.showShCacheTier) {
+    bullets.push("Hybrid: optional self-hosted full Artifactory read-cache tier (smart remote to SaaS) for regional reads — active replication warm-up is allowed on that full instance, not on Edge.");
+  }
+  if (ctx.deployModel === "hybrid" && ctx.showShCacheTier) {
+    bullets.push("Keep a single CI publish endpoint on Fully Managed; use the SH cache tier only to reduce repeated SaaS egress on deploy pulls — not as a second write path.");
+  }
+  return bullets;
 }
 
 function buildNextSteps(input, tier, ctx) {
@@ -1186,8 +1238,14 @@ function buildNextSteps(input, tier, ctx) {
 
   if (ctx.edgeCount > 0) {
     steps.push({
-      title: "Pair Distribution Edges",
-      detail: `${ctx.edgeCount} Edge node(s) — default assumption is customer self-managed Edge POPs receiving Release Bundles from Primary. If the SKU is Distribution Cloud Edge Nodes, confirm whether JFrog operates them or the customer does. Place Edges below Primary on the diagram.`,
+      title: "Pair Distribution Edges (publish on writable · pull on Edge)",
+      detail: `${ctx.edgeCount} Edge node(s) — customer self-managed Edge POPs or Distribution Cloud Edge Nodes (confirm ops model). CI/CD publishes only to the writable SaaS routing URL (or self-managed JPS if that is the writer); point deploy/runtime package managers at Edge hostnames for curated releases. Pre-stage production bits with Release Bundle Distribution — not push replication or write-through cache. Smart remotes on Edge are read-through only; active pull replication to warm Edge cache is not supported.`,
+    });
+  }
+  if (input.deployModel === "hybrid") {
+    steps.push({
+      title: "Hybrid read-cache tier (optional full Artifactory)",
+      detail: "When a self-managed writable JPS coexists with SaaS, an optional full Artifactory instance can smart-remote to SaaS for regional read-through. Use active smart-remote replication on that full instance to cut repeated SaaS egress — capability is not available on Edge nodes.",
     });
   }
 
@@ -1487,7 +1545,12 @@ svg .jfd-flow-dist{stroke-dasharray:6 5;animation:jfd-flow-dist 1.4s linear infi
 svg .jfd-flow-net{stroke-dasharray:8 4;animation:jfd-flow-net 1.2s linear infinite;}
 svg .jfd-flow-route{stroke-dasharray:7 5;animation:jfd-flow-route 1.4s linear infinite;}
 svg .jfd-flow-bypass{stroke-dasharray:3 4;animation:jfd-flow-bypass 1.6s linear infinite;}
+svg .jfd-flow-publish{stroke-dasharray:10 5;animation:jfd-flow-publish 1.3s linear infinite;}
+svg .jfd-flow-pull{stroke-dasharray:6 5;animation:jfd-flow-pull 1.4s linear infinite;}
+svg .jfd-flow-unsupported{stroke-dasharray:4 6;}
 @keyframes jfd-flow-fed{to{stroke-dashoffset:-40;}}
+@keyframes jfd-flow-publish{to{stroke-dashoffset:-30;}}
+@keyframes jfd-flow-pull{to{stroke-dashoffset:-44;}}
 @keyframes jfd-flow-dist{to{stroke-dashoffset:-44;}}
 @keyframes jfd-flow-net{to{stroke-dashoffset:-24;}}
 @keyframes jfd-flow-route{to{stroke-dashoffset:-24;}}
@@ -1530,6 +1593,8 @@ function architectureLayout(model) {
   const edgeNodes = model.edgeNodes || [];
   const edgeSelfManaged = (model.edgeOps || "selfmanaged") === "selfmanaged";
   const mtlsMode = !!model.mtlsMode;
+  const showTrafficSemantics = !!model.showTrafficSemantics;
+  const showShCacheTier = !!model.showShCacheTier;
   // PrivateLink/PSC and MyJFrog DNS Routing are JFrog Cloud (SaaS) features — per JFrog's
   // own docs, DNS Routing in MyJFrog explicitly excludes self-hosted JPDs, and
   // PrivateLink/Private Service Connect only exists for the SaaS platform. A pure
@@ -1720,7 +1785,11 @@ function architectureLayout(model) {
   const rowLayout = [];
   rows.forEach((row, index) => {
     const maxCount = Math.max(...laneKeys.map((lane) => buckets[row.key][lane].length), 1);
-    const h = cellPad * 2 + maxCount * boxH + Math.max(0, maxCount - 1) * boxGapY;
+    const shCacheRowPad = showShCacheTier && row.key === "primary"
+      && row.items.some((item) => (item.siteKind || (item.iaas === "onprem" ? "selfmanaged" : "saas")) === "selfmanaged")
+      ? 52
+      : 0;
+    const h = cellPad * 2 + maxCount * boxH + Math.max(0, maxCount - 1) * boxGapY + shCacheRowPad;
     rowLayout.push({ key: row.key, label: row.label, y: headerH + gridH, h });
     gridH += h;
     if (index < rows.length - 1) gridH += rowGap;
@@ -1796,7 +1865,7 @@ function architectureLayout(model) {
           sub = `${provider} · ${item.region} · writable`;
         } else {
           title = `Edge ${item.index}`;
-          sub = `${provider} · ${item.region} · ${edgeSelfManaged ? "self-managed" : "Cloud Edge"}`;
+          sub = `${provider} · ${item.region} · ${edgeSelfManaged ? "self-managed" : "Cloud Edge"} · read-only · no CI deploy`;
         }
         const node = {
           id: `n${nodes.length + 1}`,
@@ -2153,6 +2222,113 @@ function architectureLayout(model) {
     };
   }
 
+  let trafficSemantics = null;
+  if (showTrafficSemantics) {
+    const clientsNode = access.nodes[0];
+    const publishTarget = hasSaasSide
+      ? anchors.primary.find((a) => a.siteSaas) || anchors.primary[0]
+      : anchors.primary[0];
+    const clientX = clientsNode.x + clientsNode.w / 2;
+    const clientY = accessBoxBottom;
+    const routeX = gridX - 28;
+    const connectors = [];
+    if (publishTarget) {
+      connectors.push({
+        kind: "publish",
+        sourceId: clientsNode.id,
+        targetId: publishTarget.id,
+        x1: clientX,
+        y1: clientY,
+        routeX,
+        x2: centerX(publishTarget),
+        y2: publishTarget.y,
+        label: "deploy · promote · OSS resolve",
+      });
+    }
+    anchors.edge.forEach((edgeNode, index) => {
+      connectors.push({
+        kind: "pull",
+        sourceId: clientsNode.id,
+        targetId: edgeNode.id,
+        x1: clientX,
+        y1: clientY,
+        routeX: routeX - 14,
+        x2: centerX(edgeNode),
+        y2: edgeNode.y,
+        label: index === 0 ? "pull releases · read-only" : "",
+      });
+    });
+    if (anchors.edge.length) {
+      const ghostEdge = anchors.edge[0];
+      connectors.push({
+        kind: "unsupported",
+        sourceId: clientsNode.id,
+        targetId: ghostEdge.id,
+        x1: clientX + 36,
+        y1: clientY,
+        routeX: routeX + 10,
+        x2: centerX(ghostEdge),
+        y2: ghostEdge.y + ghostEdge.h * 0.35,
+        label: "CI deploy ✗",
+      });
+    }
+    trafficSemantics = {
+      roleLabel: "· TRAFFIC",
+      roleY: (rowLayout.find((r) => r.key === "primary") || rowLayout[0]).y - 6,
+      connectors,
+      caption: anchors.edge.length
+        ? "Publish on writable JPD/JPS; consume on Edge via Distribution — smart remotes are read-through, not write-through."
+        : "Hybrid: publish on Fully Managed; optional SH read-cache for regional pulls (not a second write path).",
+      captionY: laneTop + 12,
+    };
+    W = Math.max(W, pad * 2 + textW(trafficSemantics.caption, 10));
+  }
+
+  let shCacheTier = null;
+  if (showShCacheTier) {
+    const smNode = nodes.find((n) => !n.siteSaas && (n.rowKey === "primary" || n.rowKey === "additional"));
+    const saasNode = nodes.find((n) => n.siteSaas && (n.rowKey === "primary" || n.rowKey === "additional"));
+    if (smNode && saasNode) {
+      const cacheH = 40;
+      const cacheY = smNode.y + smNode.h + 8;
+      shCacheTier = {
+        node: {
+          id: "shcache1",
+          x: smNode.x,
+          y: cacheY,
+          w: smNode.w,
+          h: cacheH,
+          title: "SH read-cache (full Artifactory)",
+          sub: "optional · smart remote → SaaS",
+        },
+        deployConnector: {
+          kind: "pull",
+          sourceId: access.nodes[0].id,
+          targetId: "shcache1",
+          x1: access.nodes[0].x + access.nodes[0].w / 2,
+          y1: accessBoxBottom,
+          routeX: gridX - 42,
+          x2: smNode.x + smNode.w / 2,
+          y2: cacheY + cacheH / 2,
+          label: "optional regional reads",
+        },
+        upstreamConnector: {
+          kind: "bypass",
+          sourceId: "shcache1",
+          targetId: saasNode.id,
+          x1: smNode.x + smNode.w,
+          y1: cacheY + cacheH / 2,
+          x2: saasNode.x,
+          y2: saasNode.y + saasNode.h / 2,
+          label: "smart remote · read-through",
+        },
+        caption: "Active replication warm-up: full Artifactory only — not on Edge",
+        captionY: cacheY + cacheH + 12,
+      };
+      W = Math.max(W, smNode.x + smNode.w + pad, textW(shCacheTier.caption, 10) + pad * 2);
+    }
+  }
+
   return {
     empty: false,
     W,
@@ -2171,6 +2347,10 @@ function architectureLayout(model) {
     route,
     peFan,
     smLbFan,
+    trafficSemantics,
+    shCacheTier,
+    showTrafficSemantics,
+    showShCacheTier,
     hasSaasSide,
     mtlsMode,
     routeBandLabel: hasSaasSide
@@ -2425,6 +2605,53 @@ function buildArchitectureSvg(model) {
     connectors.push(T(dist.labelX, dist.busY - 5, dist.label, { fill: C.warn, size: 9, weight: 600, anchor: "middle" }));
   }
 
+  const trafficPath = (c) => {
+    const midY = (c.y1 + c.y2) / 2;
+    if (c.routeX != null) {
+      return `M ${c.x1} ${c.y1} L ${c.routeX} ${c.y1} L ${c.routeX} ${midY} L ${c.x2} ${midY} L ${c.x2} ${c.y2}`;
+    }
+    return ELBOW(c.x1, c.y1, c.x2, c.y2);
+  };
+  const ts = layout.trafficSemantics;
+  if (ts) {
+    background.push(T(pad + layout.roleW - 10, ts.roleY, ts.roleLabel, {
+      fill: C.accent, size: 9, weight: 600, anchor: "end",
+    }));
+    background.push(T(pad, ts.captionY, ts.caption, { fill: C.muted, size: 10 }));
+    ts.connectors.forEach((c) => {
+      if (c.kind === "publish") {
+        connectors.push(`<path d="${trafficPath(c)}" fill="none" class="jfd-flow jfd-flow-publish" stroke="${C.accent}" stroke-width="1.8" marker-end="url(#geo-green)"/>`);
+      } else if (c.kind === "pull") {
+        connectors.push(`<path d="${trafficPath(c)}" fill="none" class="jfd-flow jfd-flow-pull" stroke="${C.warn}" stroke-width="1.6" marker-end="url(#geo-amber)"/>`);
+      } else {
+        connectors.push(`<path d="${trafficPath(c)}" fill="none" class="jfd-flow-unsupported" stroke="${C.muted}" stroke-width="1.2"/>`);
+      }
+      if (c.label) {
+        const lx = c.routeX != null ? c.routeX + 6 : (c.x1 + c.x2) / 2;
+        const ly = c.routeX != null ? c.y1 - 6 : (c.y1 + c.y2) / 2 - 6;
+        connectors.push(T(lx, ly, c.label, { fill: c.kind === "unsupported" ? C.muted : C.txt, size: 8 }));
+      }
+    });
+  }
+
+  const shCache = layout.shCacheTier;
+  if (shCache) {
+    const cn = shCache.node;
+    nodes.push(RECT(cn.x, cn.y, cn.w, cn.h, C.cell, C.info, 6, true)
+      + T(cn.x + 10, cn.y + 16, cn.title, { weight: 600, size: 10 })
+      + T(cn.x + 10, cn.y + 30, cn.sub, { fill: C.muted, size: 9 }));
+    [shCache.deployConnector, shCache.upstreamConnector].forEach((c) => {
+      const dash = c.kind === "bypass";
+      const flowClass = dash ? "jfd-flow-bypass" : "jfd-flow-pull";
+      const stroke = dash ? C.muted : C.warn;
+      connectors.push(`<path d="${trafficPath(c)}" fill="none" class="jfd-flow ${flowClass}" stroke="${stroke}" stroke-width="1.4"${dash ? "" : ' marker-end="url(#geo-amber)"'}/>`);
+      if (c.label) {
+        connectors.push(T((c.x1 + c.x2) / 2, (c.y1 + c.y2) / 2 - 6, c.label, { fill: C.muted, size: 8, anchor: "middle" }));
+      }
+    });
+    background.push(T(pad, shCache.captionY, shCache.caption, { fill: C.muted, size: 10 }));
+  }
+
   background.push(T(pad, layout.footerMonitorY, layout.footerMonitor, { fill: C.muted, size: 11 }));
   if (layout.footerStacked) {
     background.push(T(W - pad, layout.footerRightY, layout.footerRight, { fill: C.muted, size: 10, anchor: "end" }));
@@ -2660,6 +2887,33 @@ function buildArchitectureDrawio(model) {
     });
   }
 
+  const shCacheDraw = layout.shCacheTier;
+  if (shCacheDraw) {
+    const cn = shCacheDraw.node;
+    const cacheStyle = `${DRAWIO_NODE_STYLE.additional}dashed=1;dashPattern=6 4;`;
+    const cacheValue = `<b>${esc(cn.title)}</b><br><font color="${C.muted}">${esc(cn.sub)}</font>`;
+    cells.push(vertex(cn.id, cacheValue, cacheStyle, cn.x, cn.y, cn.w, cn.h));
+    const pullAnim = `edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;flowAnimation=1;strokeColor=${C.warn};strokeWidth=1.6;endArrow=blockThin;endFill=1;fontSize=9;fontColor=${C.warn};labelBackgroundColor=#ffffff;`;
+    const bypassAnim = `edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;dashed=1;flowAnimation=1;strokeColor=${C.muted};strokeWidth=1.2;endArrow=blockThin;endFill=1;fontSize=9;fontColor=${C.muted};labelBackgroundColor=#ffffff;`;
+    cells.push(connect(shCacheDraw.deployConnector.label, pullAnim, shCacheDraw.deployConnector.sourceId, shCacheDraw.deployConnector.targetId));
+    cells.push(connect(shCacheDraw.upstreamConnector.label, bypassAnim, shCacheDraw.upstreamConnector.sourceId, shCacheDraw.upstreamConnector.targetId));
+    cells.push(label(shCacheDraw.caption, `align=left;verticalAlign=middle;fontSize=10;fontColor=${C.muted};`, layout.pad, shCacheDraw.captionY - 12, layout.W - layout.pad * 2, 18));
+  }
+
+  const tsDraw = layout.trafficSemantics;
+  if (tsDraw) {
+    cells.push(label(tsDraw.roleLabel, `align=right;verticalAlign=middle;fontSize=9;fontStyle=1;fontColor=${C.accent};`, layout.pad, tsDraw.roleY - 10, layout.roleW - 12, 18));
+    cells.push(label(tsDraw.caption, `align=left;verticalAlign=middle;fontSize=10;fontColor=${C.muted};`, layout.pad, tsDraw.captionY - 12, layout.W - layout.pad * 2, 18));
+    const publishAnim = `edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;flowAnimation=1;strokeColor=${C.accent};strokeWidth=1.8;endArrow=blockThin;endFill=1;fontSize=9;fontColor=${C.accent};labelBackgroundColor=#ffffff;`;
+    const pullAnim = `edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;flowAnimation=1;strokeColor=${C.warn};strokeWidth=1.6;endArrow=blockThin;endFill=1;fontSize=9;fontColor=${C.warn};labelBackgroundColor=#ffffff;`;
+    const unsupportedStyle = `edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;dashed=1;dashPattern=4 6;strokeColor=${C.muted};strokeWidth=1.2;endArrow=none;endFill=0;fontSize=9;fontColor=${C.muted};labelBackgroundColor=#ffffff;`;
+    tsDraw.connectors.forEach((c) => {
+      if (!c.sourceId || !c.targetId) return;
+      const style = c.kind === "publish" ? publishAnim : c.kind === "pull" ? pullAnim : unsupportedStyle;
+      cells.push(connect(c.label || "", style, c.sourceId, c.targetId));
+    });
+  }
+
   const footerY = layout.H - (layout.footerStacked ? 62 : 46);
   cells.push(label(layout.footerMonitor, `align=left;verticalAlign=middle;fontSize=11;fontColor=${C.muted};`, layout.pad, footerY, layout.W - layout.pad * 2, 18));
   cells.push(label(layout.footerLeft, `align=left;verticalAlign=middle;fontSize=11;fontColor=${C.muted};`, layout.pad, footerY + 18, layout.W - layout.pad * 2, 20));
@@ -2676,6 +2930,11 @@ function buildArchitectureDrawio(model) {
       : "Client / network access (Datacenter + Cloud clients)", C.net, C.netFill],
     [layout.hasSaasSide ? "JFrog-side DNS routing" : "Regional Load Balancers (customer-managed)", C.route, C.routeFill],
   ];
+  if (layout.showTrafficSemantics) {
+    legend.push(["CI publish / build resolve (writable JPD/JPS)", C.accent, C.primaryFill]);
+    legend.push(["Deploy pull (Edge / optional SH read-cache)", C.warn, C.edgeFill]);
+    legend.push(["Not supported (e.g. CI deploy → Edge)", C.muted, "#ffffff"]);
+  }
   legend.forEach(([text, stroke, fill], index) => {
     const x = layout.pad + index * 230;
     const y = layout.H + 12;
@@ -2824,16 +3083,6 @@ function renderLatestLicenseReference(input) {
   );
   const otherTierConflicts = allConflicts.length - conflicts.length;
 
-  const productRows = tierKey
-    ? Object.values(data.productMatrix || {}).map((row) => {
-        const cell = row[tierKey] || { state: "conditional", raw: "Not published" };
-        return `<tr>
-          <td>${esc(row.label)}</td>
-          <td><span class="status ${latestStateClass(cell.state)}">${esc(cell.raw)}</span></td>
-        </tr>`;
-      }).join("")
-    : `<tr><td colspan="2" class="muted">The scraped product matrix covers self-managed Pro X / Enterprise X / Enterprise+. SaaS Pro remains governed by Pricing and the customer order.</td></tr>`;
-
   const featureRows = tierKey
     ? Object.values(data.selfManagedFeatureMatrix || {}).map((row) => {
         const cell = row[tierKey] || { state: "conditional", raw: "Not published" };
@@ -2886,14 +3135,6 @@ function renderLatestLicenseReference(input) {
         </div>
       </div>
 
-      <details open>
-        <summary>Latest product activation matrix (${Object.keys(data.productMatrix || {}).length} products)</summary>
-        <table>
-          <thead><tr><th>Product</th><th>${esc(PLATFORM[input.platform]?.name || input.platform)}</th></tr></thead>
-          <tbody>${productRows}</tbody>
-        </table>
-      </details>
-
       ${tierKey ? `<details>
         <summary>All published self-managed feature thresholds (${Object.keys(data.selfManagedFeatureMatrix || {}).length} rows)</summary>
         <table>
@@ -2903,6 +3144,54 @@ function renderLatestLicenseReference(input) {
       </details>` : ""}
 
       <p class="muted" style="margin-bottom:0"><strong>Sources:</strong> ${sourceLinks}</p>
+    </div>
+  `;
+}
+
+function renderTrafficPatternsHtml(model) {
+  if (!model || (!model.showTrafficSemantics && !model.showShCacheTier)) return "";
+
+  const capRow = (label, writable, edge, cache) => `<tr>
+    <td>${esc(label)}</td>
+    <td class="traffic-cell">${writable}</td>
+    <td class="traffic-cell">${edge}</td>
+    <td class="traffic-cell">${cache}</td>
+  </tr>`;
+  const yes = '<span class="traffic-ok">Yes</span>';
+  const no = '<span class="traffic-no">No</span>';
+  const partial = '<span class="traffic-partial">Read-through only</span>';
+
+  const tableRows = [
+    capRow("CI deploy / promote", yes, no, yes),
+    capRow("Release Bundle Distribution", "Source (writable)", "Destination (read-only)", "Optional destination"),
+    capRow("Smart remote lazy cache", yes, yes, yes),
+    capRow("Active pull replication warm-up", yes, no, yes),
+    capRow("Write-through after CI deploy", "N/A (source of truth)", no, partial),
+  ].join("");
+
+  const configBullets = (model.trafficPatterns || [])
+    .map((line) => `<li>${esc(line)}</li>`)
+    .join("");
+
+  const reduceImpact = `
+    <ul class="checklist traffic-impact">
+      <li><strong>One publish endpoint</strong> — CI/CD and promote jobs stay on the writable Fully Managed routing URL (or self-managed JPS when that is the writer). Do not repoint deploy plugins to Edge.</li>
+      <li><strong>Build-time dependencies</strong> — resolve OSS and curated packages from SaaS virtuals (Curation enforced at the writable hub).</li>
+      <li><strong>Runtime / regional pull</strong> — use Edge hostnames after Release Bundle Distribution; accept first-hit latency for optional smart-remote paths or pre-stage RBs.</li>
+      ${model.showShCacheTier ? "<li><strong>Hybrid SH read-cache</strong> — optional full Artifactory smart-remote to SaaS for regional reads; use active replication on that instance to reduce repeated SaaS egress (not available on Edge).</li>" : ""}
+    </ul>`;
+
+  return `
+    <div class="result-block traffic-patterns-block">
+      <h3>Traffic &amp; cache patterns</h3>
+      <p class="muted" style="margin-top:0">What each tier supports — aligned with Edge / Distribution / smart-remote behavior. See also <a href="https://docs.jfrog.com/installation/docs/installing-artifactory-edge" target="_blank" rel="noopener">Installing Artifactory Edge</a> and <a href="https://docs.jfrog.com/artifactory/docs/smart-remote-repositories" target="_blank" rel="noopener">Smart Remote Repositories</a>.</p>
+      <table class="traffic-matrix">
+        <thead><tr><th>Capability</th><th>Writable JPD / JPS</th><th>Edge (SH / Cloud)</th><th>SH read-cache (full Artifactory)</th></tr></thead>
+        <tbody>${tableRows}</tbody>
+      </table>
+      ${configBullets ? `<h4 style="margin:16px 0 8px;font-size:13px">For this configuration</h4><ul class="checklist">${configBullets}</ul>` : ""}
+      <h4 style="margin:16px 0 8px;font-size:13px">Reduce CI / developer impact</h4>
+      ${reduceImpact}
     </div>
   `;
 }
@@ -2934,9 +3223,14 @@ function render(result) {
   window.__lastDiagramSvg = diagramSvg;
   window.__lastDiagramDrawio = diagramDrawio;
   const mtlsDiagram = !!result.diagramSites?.mtlsMode;
-  const diagramIntro = mtlsDiagram
+  const trafficSemanticsDiagram = !!result.diagramSites?.showTrafficSemantics;
+  let diagramIntro = mtlsDiagram
     ? `Geography grid: <strong>West ← Central → East → Other</strong>. This is the <strong>mTLS + custom internal domain</strong> variant: on-prem CI/CD clients carry a client cert, traverse VPN → corporate DNS → inbound resolver → <strong>Private DNS zone</strong> (no load balancer on the PE path), reach Private Endpoint pass-through, then <strong>TLS + mTLS terminate on JFrog SaaS</strong>. Public and cloud-native bypass paths still apply. JFrog-side DNS routing handles the public routing URL only — Private Endpoints fan directly into each JPD.`
     : `Geography grid: <strong>West ← Central → East → Other</strong>. Empty geography columns are hidden. On-Prem DC names and deployments with no region go to <strong>OTHER</strong> (not Central). The top overview band always shows on-prem CI/CD client connectivity (VPN, conditional DNS forwarder, resolver endpoint, load balancer) plus cloud-native and public bypass paths — regardless of whether the order includes an actual Self Managed JPS region — and Private Endpoint / JFrog-side DNS routing (manual failover / geo-location) in front of the writable-site grid; the footer calls out auth and monitoring for this configuration.`;
+  if (trafficSemanticsDiagram) {
+    diagramIntro += " <strong>Traffic overlays:</strong> green = CI publish / build resolve to writable JPD/JPS; amber = deploy pull to Edge (or optional hybrid read-cache); dashed gray = not supported (e.g. CI deploy → Edge). Hybrid orders also show an optional self-hosted <em>full Artifactory</em> read-cache tier (smart remote to SaaS).";
+  }
+  const trafficPatternsHtml = renderTrafficPatternsHtml(result.diagramSites);
   const diagramLegendNet = mtlsDiagram
     ? "Client / network access (VPN · DNS · Private DNS · PE pass-through · TLS+mTLS on JFrog)"
     : "Client / network access (VPN · DNS · LB · Private Endpoint)";
@@ -3019,6 +3313,7 @@ function render(result) {
         <span class="lg-edge">Edge (self-managed / Cloud)</span>
         <span class="lg-link">West · Central · East placement</span>
         <span class="lg-flow">Every arrow animates: federation (green) · distribution (amber) · client/network access (violet) · JFrog-side routing (teal) · optional bypasses (gray)</span>
+        ${trafficSemanticsDiagram ? '<span class="lg-publish">CI publish / build resolve (writable)</span><span class="lg-pull">Deploy pull (Edge / read-cache)</span><span class="lg-unsupported">Not supported (dashed)</span>' : ""}
       </div>
       <div class="btn-row">
         <button type="button" id="btnDownloadDiagram">Download diagram (.svg)</button>
@@ -3028,6 +3323,8 @@ function render(result) {
       </div>
       <p class="muted" style="margin:8px 0 0;font-size:11px">The .svg keeps its animation in any browser. The .xml file opens directly in <strong>draw.io</strong> (app.diagrams.net) as native, editable shapes. <strong>Lucidchart will reject it if uploaded directly</strong> — Lucid requires imported .xml/.drawio files to have actually been exported by the draw.io app, not just shaped like one, so open it in draw.io first, save/export from there, then import <em>that</em> file into Lucidchart (File → Import Diagram). <strong>Lucid Spark</strong> has no draw.io/native-shape import path at all (CSV, PNG, and PDF only) — use the .png download and insert it as a flat image there.</p>
     </div>
+
+    ${trafficPatternsHtml}
 
     <div class="result-block">
       <h3>Add-ons on this order</h3>
